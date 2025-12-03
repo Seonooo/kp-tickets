@@ -20,7 +20,7 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 # Copy jar from build stage
-COPY --from=build /app/build/libs/*.jar app.jar
+COPY --from=build /app/build/libs/ai-0.0.1-SNAPSHOT.jar app.jar
 
 # Expose port
 EXPOSE 8080
