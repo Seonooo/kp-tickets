@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: concert-ticketing-test
+
+  # datasource, redis, kafka는 @ServiceConnection으로 자동 설정됨 (Testcontainers)
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  kafka:
+    consumer:
+      group-id: test-consumer-group
+      auto-offset-reset: earliest
+    producer:
+      acks: all
+      retries: 0
+
+server:
+  port: 0  # Random port for tests
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: when_authorized

@@ -69,13 +69,13 @@
 
 #### C. 검증 및 연장 (Validation & Extension)
 - **C-1. 최초 진입 (Page Access):**
-    - 유저가 예매 페이지 진입(`GET /booking`) 시 토큰을 검증한다.
+    - 유저가 예매 페이지 진입(`GET /api/v1/bookings`) 시 토큰을 검증한다.
     - 유효하다면 즉시 **TTL을 10분으로 초기화**한다.
         - `EXPIRE active:token:{userId} 600`
         - `ZADD queue:active {현재시간 + 600} {userId}`
 
 - **C-2. 명시적 연장 (User Action):**
-    - 유저가 '시간 연장' 버튼 클릭 시 (`POST /queue/extension`):
+    - 유저가 '시간 연장' 버튼 클릭 시 (`POST /api/v1/queue/extension`):
     1. `HGET active:token:{userId} extend_count` 조회.
     2. 값이 2 이상이면 에러 반환.
     3. 2 미만이면:

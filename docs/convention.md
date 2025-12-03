@@ -12,7 +12,7 @@ AI 에이전트는 코드를 작성할 때 본 문서의 규칙을 **엄격히 �
 ### 1.1 Root Package Structure
 
 ```text
-com.ticket
+personal.ai
 ├── common               # 전역 공통 유틸리티, 예외, 설정 (Global Config)
 ├── user                 # [Domain] User Service (Auth)
 ├── queue                # [Domain] Queue Service (Redis)
@@ -25,7 +25,7 @@ com.ticket
 각 도메인 패키지 내부는 다음과 같은 계층 구조를 가진다.
 
 ```text
-com.ticket.booking
+personal.ai.booking
 ├── domain               # [Core] 순수 비즈니스 로직 (POJO)
 │   ├── model            # Entities, Value Objects
 │   └── service          # Domain Services (Business Logic)
@@ -142,7 +142,7 @@ public record ApiResponse<T>(
 
 ### 5.2 Exception Hierarchy & Error Codes
 
-- **Error Code Format:** `{Domain}{Number}` (ex. `Q001` 대기열 만료, `B002` 좌석 선점 실패)
+- **Error Code Format:** `STRING_TYPE` (Enum style) (ex. `QUEUE_EXPIRED`, `SEAT_ALREADY_RESERVED`)
 - **Structure:**
     - `BusinessException`: 최상위 클래스 (ErrorCode 필드 포함)
     - **Standard:** `EntityNotFoundException` (404), `InvalidValueException` (400)

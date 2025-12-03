@@ -96,7 +96,7 @@
 ## 5. Build & Dev Tools
 
 - **Build Tool:** **Gradle 8.5+**
-- **DSL:** Kotlin DSL (`build.gradle.kts`)
+- **DSL:** Groovy DSL (`build.gradle`)
 - **Utils:**
     - **Lombok:** (`@RequiredArgsConstructor`, `@Getter`, `@ToString` 위주 사용)
     - **Jackson:** (`ObjectMapper` - JavaTimeModule 등록 필수)
