@@ -2,9 +2,7 @@ package personal.ai.adapter.in.web;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
-import org.springframework.boot.actuate.health.Status;
+import org.apache.kafka.clients.admin.AdminClient;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
@@ -58,8 +56,8 @@ public class HealthCheckController {
         );
 
         boolean allHealthy = "UP".equals(databaseStatus) &&
-                             "UP".equals(redisStatus) &&
-                             "UP".equals(kafkaStatus);
+                "UP".equals(redisStatus) &&
+                "UP".equals(kafkaStatus);
 
         if (allHealthy) {
             return ResponseEntity.ok(
@@ -104,10 +102,14 @@ public class HealthCheckController {
      */
     private String checkKafka() {
         try {
-            // Kafka Admin의 설정이 정상적으로 로드되었는지 확인
-            // Actuator가 자동으로 Kafka health check를 수행하므로
-            // 기본적으로 UP 상태로 반환 (Actuator에서 상세 체크)
-            return kafkaAdmin != null ? "UP" : "DOWN";
+            try (AdminClient adminClient =
+                         AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+
+                var clusterInfo = adminClient.describeCluster();
+                var nodes = clusterInfo.nodes().get(5, java.util.concurrent.TimeUnit.SECONDS);
+
+                return (nodes != null && !nodes.isEmpty()) ? "UP" : "DOWN";
+            }
         } catch (Exception e) {
             log.error("Kafka health check failed", e);
             return "DOWN";

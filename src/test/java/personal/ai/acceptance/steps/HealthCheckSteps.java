@@ -24,8 +24,8 @@ public class HealthCheckSteps {
     @Given("애플리케이션이 실행 중입니다")
     public void 애플리케이션이_실행_중입니다() {
         // Spring Boot가 실행되었는지 확인
-        String baseUrl = testAdapter.getBaseUrl();
-        assertThat(baseUrl).isNotEmpty();
+        Response healthResponse = testAdapter.get("/actuator/health");
+        assertThat(healthResponse.statusCode()).isEqualTo(200);
     }
 
     @When("{string} 엔드포인트에 GET 요청을 보낸다")

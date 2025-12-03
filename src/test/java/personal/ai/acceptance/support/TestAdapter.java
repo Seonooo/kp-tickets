@@ -4,6 +4,7 @@ import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Scope;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +15,7 @@ import static io.restassured.RestAssured.given;
  * 테스트 코드가 비즈니스 로직에 강결합되지 않도록 인터페이스 역할을 수행합니다.
  */
 @Component
+@Scope("cucumber-glue")
 @RequiredArgsConstructor
 public class TestAdapter {
 
