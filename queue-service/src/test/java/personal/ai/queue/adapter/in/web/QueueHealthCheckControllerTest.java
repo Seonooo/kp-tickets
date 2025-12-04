@@ -8,6 +8,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import personal.ai.common.health.HealthCheckService;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -28,13 +29,14 @@ class QueueHealthCheckControllerTest {
     private MockMvc mockMvc;
 
     @MockBean
-    private RedisTemplate<String, String> redisTemplate;
+    private HealthCheckService healthCheckService;
 
     @Test
     @DisplayName("헬스 체크 API는 정상 응답을 반환한다")
     void healthCheckReturnsSuccess() throws Exception {
-        // Given: Redis가 정상 동작 중
-        given(redisTemplate.execute(any(RedisCallback.class))).willReturn("PONG");
+        // Given: Redis, Kafka가 정상 동작 중
+        given(healthCheckService.checkRedis()).willReturn("UP");
+        given(healthCheckService.checkKafka()).willReturn("UP");
 
         // When: 헬스 체크 엔드포인트를 호출하면
         mockMvc.perform(get("/api/v1/health")
@@ -45,14 +47,16 @@ class QueueHealthCheckControllerTest {
                 .andExpect(jsonPath("$.result").value("success"))
                 .andExpect(jsonPath("$.message").exists())
                 .andExpect(jsonPath("$.data").exists())
-                .andExpect(jsonPath("$.data.redis").value("UP"));
+                .andExpect(jsonPath("$.data.redis").value("UP"))
+                .andExpect(jsonPath("$.data.kafka").value("UP"));
     }
 
     @Test
     @DisplayName("헬스 체크 응답은 ApiResponse 포맷을 따른다")
     void healthCheckFollowsApiResponseFormat() throws Exception {
         // Given: agent.md API Design Guidelines
-        given(redisTemplate.execute(any(RedisCallback.class))).willReturn("PONG");
+        given(healthCheckService.checkRedis()).willReturn("UP");
+        given(healthCheckService.checkKafka()).willReturn("UP");
 
         // When: 헬스 체크를 호출하면
         mockMvc.perform(get("/api/v1/health"))
@@ -64,16 +68,18 @@ class QueueHealthCheckControllerTest {
     }
 
     @Test
-    @DisplayName("Queue Service는 Redis 상태만 체크한다")
-    void queueServiceOnlyChecksRedis() throws Exception {
-        // Given: Queue Service는 경량 서비스
-        given(redisTemplate.execute(any(RedisCallback.class))).willReturn("PONG");
+    @DisplayName("Queue Service는 Redis와 Kafka 상태를 체크한다")
+    void queueServiceChecksRedisAndKafka() throws Exception {
+        // Given: Queue Service는 Database 없이 Redis와 Kafka만 사용
+        given(healthCheckService.checkRedis()).willReturn("UP");
+        given(healthCheckService.checkKafka()).willReturn("UP");
 
         // When: 헬스 체크를 호출하면
         mockMvc.perform(get("/api/v1/health"))
-                // Then: Redis 상태만 포함된다
+                // Then: Redis와 Kafka 상태만 포함되고, Database는 없다
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.redis").exists())
+                .andExpect(jsonPath("$.data.kafka").exists())
                 .andExpect(jsonPath("$.data.database").doesNotExist());
     }
 }

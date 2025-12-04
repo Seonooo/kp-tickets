@@ -2,19 +2,15 @@ package personal.ai.core.adapter.in.web;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.springframework.data.redis.connection.RedisConnection;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
-import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import personal.ai.common.dto.ApiResponse;
 import personal.ai.common.dto.HealthCheckResponse;
+import personal.ai.common.health.HealthCheckService;
 
 import javax.sql.DataSource;
-import java.sql.Connection;
 
 /**
  * Health Check API Controller
@@ -32,8 +28,7 @@ import java.sql.Connection;
 public class HealthCheckController {
 
     private final DataSource dataSource;
-    private final RedisTemplate<String, String> redisTemplate;
-    private final KafkaAdmin kafkaAdmin;
+    private final HealthCheckService healthCheckService;
 
     /**
      * Health Check 엔드포인트
@@ -45,9 +40,9 @@ public class HealthCheckController {
     public ResponseEntity<ApiResponse<HealthCheckResponse>> healthCheck() {
         log.debug("Health check requested");
 
-        String databaseStatus = checkDatabase();
-        String redisStatus = checkRedis();
-        String kafkaStatus = checkKafka();
+        String databaseStatus = healthCheckService.checkDatabase(dataSource);
+        String redisStatus = healthCheckService.checkRedis();
+        String kafkaStatus = healthCheckService.checkKafka();
 
         HealthCheckResponse data = new HealthCheckResponse(
                 databaseStatus,
@@ -67,52 +62,6 @@ public class HealthCheckController {
             return ResponseEntity.ok(
                     ApiResponse.error("Some components are unhealthy", data)
             );
-        }
-    }
-
-    /**
-     * 데이터베이스 연결 상태 확인
-     */
-    private String checkDatabase() {
-        try (Connection connection = dataSource.getConnection()) {
-            return connection.isValid(1) ? "UP" : "DOWN";
-        } catch (Exception e) {
-            log.error("Database health check failed", e);
-            return "DOWN";
-        }
-    }
-
-    /**
-     * Redis 연결 상태 확인
-     */
-    private String checkRedis() {
-        try {
-            String response = redisTemplate.execute((RedisConnection connection) -> {
-                return connection.ping();
-            });
-            return "PONG".equals(response) ? "UP" : "DOWN";
-        } catch (Exception e) {
-            log.error("Redis health check failed", e);
-            return "DOWN";
-        }
-    }
-
-    /**
-     * Kafka 연결 상태 확인
-     */
-    private String checkKafka() {
-        try {
-            try (AdminClient adminClient =
-                        AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
-
-                var clusterInfo = adminClient.describeCluster();
-                var nodes = clusterInfo.nodes().get(5, java.util.concurrent.TimeUnit.SECONDS);
-
-                return (nodes != null && !nodes.isEmpty()) ? "UP" : "DOWN";
-            }
-        } catch (Exception e) {
-            log.error("Kafka health check failed", e);
-            return "DOWN";
         }
     }
 }

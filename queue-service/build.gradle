@@ -3,17 +3,11 @@ plugins {
 }
 
 dependencies {
-    // Common 모듈 의존성
+    // Common 모듈 의존성 (web, validation, redis, kafka 포함)
     implementation project(':common')
 
-    // Spring Boot Starters
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    // Queue Service 전용 Spring Boot Starters
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
-
-    // Kafka
-    implementation 'org.springframework.kafka:spring-kafka'
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'

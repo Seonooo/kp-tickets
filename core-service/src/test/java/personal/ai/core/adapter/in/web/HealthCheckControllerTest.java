@@ -8,6 +8,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import personal.ai.common.health.HealthCheckService;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -34,16 +35,15 @@ class HealthCheckControllerTest {
     private DataSource dataSource;
 
     @MockBean
-    private RedisTemplate<String, String> redisTemplate;
+    private HealthCheckService healthCheckService;
 
     @Test
     @DisplayName("헬스 체크 API는 정상 응답을 반환한다")
     void healthCheckReturnsSuccess() throws Exception {
-        // Given: DB와 Redis가 정상 동작 중
-        Connection mockConnection = org.mockito.Mockito.mock(Connection.class);
-        given(dataSource.getConnection()).willReturn(mockConnection);
-        given(mockConnection.isValid(1)).willReturn(true);
-        given(redisTemplate.execute(any(RedisCallback.class))).willReturn("PONG");
+        // Given: DB, Redis, Kafka가 정상 동작 중
+        given(healthCheckService.checkDatabase(any(DataSource.class))).willReturn("UP");
+        given(healthCheckService.checkRedis()).willReturn("UP");
+        given(healthCheckService.checkKafka()).willReturn("UP");
 
         // When: 헬스 체크 엔드포인트를 호출하면
         mockMvc.perform(get("/api/v1/health")
@@ -55,17 +55,17 @@ class HealthCheckControllerTest {
                 .andExpect(jsonPath("$.message").exists())
                 .andExpect(jsonPath("$.data").exists())
                 .andExpect(jsonPath("$.data.database").value("UP"))
-                .andExpect(jsonPath("$.data.redis").value("UP"));
+                .andExpect(jsonPath("$.data.redis").value("UP"))
+                .andExpect(jsonPath("$.data.kafka").value("UP"));
     }
 
     @Test
     @DisplayName("헬스 체크 응답은 ApiResponse 포맷을 따른다")
     void healthCheckFollowsApiResponseFormat() throws Exception {
         // Given: agent.md API Design Guidelines
-        Connection mockConnection = org.mockito.Mockito.mock(Connection.class);
-        given(dataSource.getConnection()).willReturn(mockConnection);
-        given(mockConnection.isValid(1)).willReturn(true);
-        given(redisTemplate.execute(any(RedisCallback.class))).willReturn("PONG");
+        given(healthCheckService.checkDatabase(any(DataSource.class))).willReturn("UP");
+        given(healthCheckService.checkRedis()).willReturn("UP");
+        given(healthCheckService.checkKafka()).willReturn("UP");
 
         // When: 헬스 체크를 호출하면
         mockMvc.perform(get("/api/v1/health"))

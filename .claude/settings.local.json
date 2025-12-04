@@ -11,7 +11,8 @@
       "Bash(find:*)",
       "Bash(tree:*)",
       "Bash(./gradlew clean build:*)",
-      "Bash(./gradlew :core-service:test:*)"
+      "Bash(./gradlew :core-service:test:*)",
+      "Bash(./gradlew :queue-service:test:*)"
     ],
     "deny": [],
     "ask": []

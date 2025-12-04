@@ -3,14 +3,24 @@
 
 plugins {
     id 'org.springframework.boot'
+    id 'java-library'  // api 사용을 위한 플러그인
 }
 
 dependencies {
-    // Spring Boot Web (DTO에서 사용할 어노테이션)
-    implementation 'org.springframework.boot:spring-boot-starter-web'
+    // Spring Boot Web (DTO에서 사용할 어노테이션) - 의존하는 모듈에 전파
+    api 'org.springframework.boot:spring-boot-starter-web'
 
-    // Validation
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    // Validation - 의존하는 모듈에 전파
+    api 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Redis (HealthCheckService용) - 의존하는 모듈에 전파
+    api 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // Kafka (HealthCheckService용) - 의존하는 모듈에 전파
+    api 'org.springframework.kafka:spring-kafka'
+
+    // Test 인터페이스용 (컴파일 시에만 필요, 런타임은 각 서비스가 제공)
+    compileOnly 'io.rest-assured:rest-assured:5.4.0'
 }
 
 // 일반 jar만 생성 (executable jar 아님)
