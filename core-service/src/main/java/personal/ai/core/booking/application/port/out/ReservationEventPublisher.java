@@ -39,4 +39,14 @@ public interface ReservationEventPublisher {
      * @param reservation 만료된 예약 정보
      */
     void publishReservationExpired(Reservation reservation);
+
+    /**
+     * Raw Event 발행 (Outbox Pattern용)
+     * 이미 직렬화된 JSON Payload를 그대로 발행
+     *
+     * @param topic   발행할 Kafka 토픽
+     * @param key     메시지 키 (순서 보장용, e.g. reservationId)
+     * @param payload 메시지 본문 (JSON String)
+     */
+    void publishRaw(String topic, String key, String payload);
 }

@@ -13,8 +13,10 @@ public interface GetReservationUseCase {
      * 결제 페이지에서 예약 정보 확인용
      *
      * @param reservationId 예약 ID
+     * @param userId 사용자 ID (소유권 검증용)
      * @return 예약 정보
      * @throws personal.ai.core.booking.domain.exception.ReservationNotFoundException 예약을 찾을 수 없을 때
+     * @throws personal.ai.common.exception.BusinessException 예약 소유자가 아닐 때 (FORBIDDEN)
      */
-    Reservation getReservation(Long reservationId);
+    Reservation getReservation(Long reservationId, Long userId);
 }

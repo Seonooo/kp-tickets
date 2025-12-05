@@ -29,11 +29,14 @@ spring:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
       password: ${SPRING_REDIS_PASSWORD:}
+      timeout: ${SPRING_REDIS_TIMEOUT:3000}  # 3초 타임아웃
       lettuce:
         pool:
-          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
-          max-idle: ${REDIS_POOL_MAX_IDLE:8}
-          min-idle: ${REDIS_POOL_MIN_IDLE:2}
+          max-active: ${REDIS_POOL_MAX_ACTIVE:50}  # 대규모 트래픽 대응 (8 -> 50)
+          max-idle: ${REDIS_POOL_MAX_IDLE:20}      # (8 -> 20)
+          min-idle: ${REDIS_POOL_MIN_IDLE:10}      # (2 -> 10)
+          max-wait: ${REDIS_POOL_MAX_WAIT:3000}    # 연결 대기 시간 3초
+        shutdown-timeout: ${REDIS_SHUTDOWN_TIMEOUT:100}
 
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -44,17 +47,18 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       acks: ${KAFKA_PRODUCER_ACKS:all}
       retries: ${KAFKA_PRODUCER_RETRIES:3}
 
+# External Service 연동 설정
+external:
+  queue-service:
+    base-url: ${QUEUE_SERVICE_URL:http://localhost:8081}
+    timeout-seconds: ${QUEUE_SERVICE_TIMEOUT:5}
+
 server:
   port: ${SERVER_PORT:8080}
-
-# Queue Service 연동 설정
-queue:
-  service:
-    url: ${QUEUE_SERVICE_URL:http://localhost:8081}
 
 management:
   endpoints:

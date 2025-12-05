@@ -40,7 +40,11 @@ public enum ErrorCode {
     QUEUE_TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "Q002", "대기열 토큰이 만료되었습니다."),
     QUEUE_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "Q003", "유효하지 않은 대기열 토큰입니다."),
     QUEUE_FULL(HttpStatus.TOO_MANY_REQUESTS, "Q004", "대기열이 가득 찼습니다."),
-    QUEUE_EXTENSION_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "Q005", "더 이상 연장할 수 없습니다.");
+    QUEUE_EXTENSION_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "Q005", "더 이상 연장할 수 없습니다."),
+
+    // External Service (6xxx)
+    EXTERNAL_SERVICE_ERROR(HttpStatus.SERVICE_UNAVAILABLE, "E001", "외부 서비스 오류가 발생했습니다."),
+    EXTERNAL_SERVICE_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "E002", "외부 서비스 응답 시간 초과입니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
