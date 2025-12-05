@@ -22,9 +22,13 @@ public enum ErrorCode {
 
     // Booking Domain (3xxx)
     SEAT_NOT_FOUND(HttpStatus.NOT_FOUND, "B001", "좌석을 찾을 수 없습니다."),
-    SEAT_ALREADY_BOOKED(HttpStatus.CONFLICT, "B002", "이미 예약된 좌석입니다."),
-    BOOKING_NOT_FOUND(HttpStatus.NOT_FOUND, "B003", "예약을 찾을 수 없습니다."),
-    BOOKING_ALREADY_CANCELLED(HttpStatus.CONFLICT, "B004", "이미 취소된 예약입니다."),
+    SEAT_NOT_AVAILABLE(HttpStatus.BAD_REQUEST, "B002", "예약 불가능한 좌석입니다."),
+    SEAT_ALREADY_RESERVED(HttpStatus.CONFLICT, "B003", "이미 선택된 좌석입니다."),
+    RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "B004", "예약을 찾을 수 없습니다."),
+    RESERVATION_EXPIRED(HttpStatus.BAD_REQUEST, "B005", "예약이 만료되었습니다."),
+    CONCURRENT_RESERVATION(HttpStatus.CONFLICT, "B006", "동시 예약 충돌이 발생했습니다."),
+    CONCERT_NOT_FOUND(HttpStatus.NOT_FOUND, "B007", "콘서트를 찾을 수 없습니다."),
+    SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "B008", "콘서트 일정을 찾을 수 없습니다."),
 
     // Payment Domain (4xxx)
     PAYMENT_FAILED(HttpStatus.BAD_REQUEST, "P001", "결제에 실패했습니다."),
