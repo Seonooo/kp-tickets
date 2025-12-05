@@ -36,6 +36,10 @@ public class RedisQueueAdapter implements QueueRepository {
     private final RedisTemplate<String, String> redisTemplate;
     private final org.springframework.data.redis.core.script.RedisScript<Long> addToActiveQueueScript;
     private final org.springframework.data.redis.core.script.RedisScript<Long> removeExpiredTokensScript;
+    private final org.springframework.data.redis.core.script.RedisScript<Long> updateTokenExpirationScript;
+    private final org.springframework.data.redis.core.script.RedisScript<Long> removeFromActiveQueueScript;
+    private final org.springframework.data.redis.core.script.RedisScript<String> moveToActiveQueueScript;
+    private final org.springframework.data.redis.core.script.RedisScript<Long> activateTokenScript;
 
     @Override
     public Long addToWaitQueue(String concertId, String userId) {
@@ -149,29 +153,39 @@ public class RedisQueueAdapter implements QueueRepository {
 
     @Override
     public void updateTokenExpiration(String concertId, String userId, Instant expiredAt) {
-        // 1. Active Queue (ZSet) Score 갱신
         String queueKey = RedisKeyGenerator.activeQueueKey(concertId);
-        double score = expiredAt.getEpochSecond();
-        redisTemplate.opsForZSet().add(queueKey, userId, score);
-
-        // 2. Hash 만료 시간만 갱신 (상태는 변경하지 않음)
         String tokenKey = RedisKeyGenerator.activeTokenKey(concertId, userId);
-        redisTemplate.opsForHash().put(tokenKey, FIELD_EXPIRED_AT,
-                String.valueOf(expiredAt.getEpochSecond()));
 
-        // 3. Hash TTL 갱신
+        // TTL 계산
         long ttlSeconds = expiredAt.getEpochSecond() - Instant.now().getEpochSecond() + TTL_BUFFER_SECONDS;
-        if (ttlSeconds > 0) {
-            redisTemplate.expire(tokenKey, java.time.Duration.ofSeconds(ttlSeconds));
-        }
 
-        log.debug("Updated token expiration: concertId={}, userId={}, expiredAt={}",
-                concertId, userId, expiredAt);
+        // Lua Script 실행 (원자적 연산)
+        // KEYS[1]: Active Queue Key (ZSet)
+        // KEYS[2]: Token Key (Hash)
+        // ARGV[1]: User ID
+        // ARGV[2]: New Expiration Time (epoch seconds)
+        // ARGV[3]: TTL (seconds)
+        Long result = redisTemplate.execute(updateTokenExpirationScript,
+                List.of(queueKey, tokenKey),
+                userId,
+                String.valueOf(expiredAt.getEpochSecond()),
+                String.valueOf(ttlSeconds > 0 ? ttlSeconds : 0));
+
+        if (result != null && result == 1L) {
+            log.debug("Updated token expiration (Lua): concertId={}, userId={}, expiredAt={}",
+                    concertId, userId, expiredAt);
+        } else {
+            log.warn("Failed to update token expiration: concertId={}, userId={} (token not found)",
+                    concertId, userId);
+        }
     }
 
     @Override
     public void updateTokenStatus(String concertId, String userId, QueueStatus status) {
         String tokenKey = RedisKeyGenerator.activeTokenKey(concertId, userId);
+
+        // 상태만 변경 (TTL은 기존 값 유지)
+        // TTL 변경이 필요한 경우 updateTokenExpiration()을 별도로 호출
         redisTemplate.opsForHash().put(tokenKey, FIELD_STATUS, status.name());
 
         log.debug("Updated token status: concertId={}, userId={}, status={}",
@@ -183,6 +197,8 @@ public class RedisQueueAdapter implements QueueRepository {
         String tokenKey = RedisKeyGenerator.activeTokenKey(concertId, userId);
 
         // HINCRBY: Atomic increment
+        // Note: TTL 갱신은 updateTokenExpiration()에서 처리됨
+        //       이 메서드는 연장 횟수 카운팅만 담당
         Long newCount = redisTemplate.opsForHash().increment(tokenKey, FIELD_EXTEND_COUNT, INCREMENT_VALUE);
 
         log.debug("Incremented extend count: concertId={}, userId={}, count={}",
@@ -225,15 +241,22 @@ public class RedisQueueAdapter implements QueueRepository {
 
     @Override
     public void removeFromActiveQueue(String concertId, String userId) {
-        // 1. Active Queue (ZSet)에서 제거
         String queueKey = RedisKeyGenerator.activeQueueKey(concertId);
-        redisTemplate.opsForZSet().remove(queueKey, userId);
-
-        // 2. Active Token (Hash) 제거
         String tokenKey = RedisKeyGenerator.activeTokenKey(concertId, userId);
-        redisTemplate.delete(tokenKey);
 
-        log.debug("Removed from active queue: concertId={}, userId={}", concertId, userId);
+        // Lua Script 실행 (원자적 연산)
+        // KEYS[1]: Active Queue Key (ZSet)
+        // KEYS[2]: Token Key (Hash)
+        // ARGV[1]: User ID
+        Long result = redisTemplate.execute(removeFromActiveQueueScript,
+                List.of(queueKey, tokenKey),
+                userId);
+
+        if (result != null && result == 1L) {
+            log.debug("Removed from active queue (Lua): concertId={}, userId={}", concertId, userId);
+        } else {
+            log.debug("No data to remove from active queue: concertId={}, userId={}", concertId, userId);
+        }
     }
 
     @Override
@@ -245,37 +268,145 @@ public class RedisQueueAdapter implements QueueRepository {
     }
 
     @Override
+    public List<String> moveToActiveQueueAtomic(String concertId, int count, Instant expiredAt) {
+        String waitQueueKey = RedisKeyGenerator.waitQueueKey(concertId);
+        String activeQueueKey = RedisKeyGenerator.activeQueueKey(concertId);
+
+        // TTL 계산
+        long ttlSeconds = expiredAt.getEpochSecond() - Instant.now().getEpochSecond() + TTL_BUFFER_SECONDS;
+
+        // Lua Script 실행 (원자적 연산)
+        // KEYS[1]: Wait Queue Key (ZSet)
+        // KEYS[2]: Active Queue Key (ZSet)
+        // ARGV[1]: Batch Size
+        // ARGV[2]: Expiration Time (epoch seconds)
+        // ARGV[3]: Token Key Prefix
+        // ARGV[4]: Concert ID
+        // ARGV[5]: TTL (seconds)
+        String jsonResult = redisTemplate.execute(moveToActiveQueueScript,
+                List.of(waitQueueKey, activeQueueKey),
+                String.valueOf(count),
+                String.valueOf(expiredAt.getEpochSecond()),
+                "active:token:",
+                concertId,
+                String.valueOf(ttlSeconds > 0 ? ttlSeconds : 0));
+
+        if (jsonResult == null || jsonResult.isEmpty() || jsonResult.equals("[]")) {
+            log.debug("No users moved (Lua): concertId={}", concertId);
+            return Collections.emptyList();
+        }
+
+        try {
+            // JSON 파싱 (간단한 배열 파싱)
+            // ["USER-001","USER-002"] 형태
+            String[] userIds = jsonResult
+                    .replace("[", "")
+                    .replace("]", "")
+                    .replace("\"", "")
+                    .split(",");
+
+            List<String> result = Arrays.stream(userIds)
+                    .filter(id -> !id.trim().isEmpty())
+                    .collect(Collectors.toList());
+
+            log.debug("Moved users atomically (Lua): concertId={}, count={}", concertId, result.size());
+            return result;
+
+        } catch (Exception e) {
+            log.error("Failed to parse Lua script result: concertId={}, result={}",
+                    concertId, jsonResult, e);
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
+    public boolean activateTokenAtomic(String concertId, String userId, Instant newExpiredAt) {
+        String queueKey = RedisKeyGenerator.activeQueueKey(concertId);
+        String tokenKey = RedisKeyGenerator.activeTokenKey(concertId, userId);
+
+        // TTL 계산
+        long ttlSeconds = newExpiredAt.getEpochSecond() - Instant.now().getEpochSecond() + TTL_BUFFER_SECONDS;
+
+        // Lua Script 실행 (원자적 연산)
+        // KEYS[1]: Active Queue Key (ZSet)
+        // KEYS[2]: Token Key (Hash)
+        // ARGV[1]: User ID
+        // ARGV[2]: New Expiration Time (epoch seconds)
+        // ARGV[3]: TTL (seconds)
+        // Return: 1 (성공), 0 (실패), -1 (이미 ACTIVE)
+        Long result = redisTemplate.execute(activateTokenScript,
+                List.of(queueKey, tokenKey),
+                userId,
+                String.valueOf(newExpiredAt.getEpochSecond()),
+                String.valueOf(ttlSeconds > 0 ? ttlSeconds : 0));
+
+        if (result != null && result == 1L) {
+            log.debug("Token activated atomically (Lua): concertId={}, userId={}", concertId, userId);
+            return true;
+        } else if (result != null && result == -1L) {
+            log.debug("Token already active: concertId={}, userId={}", concertId, userId);
+            return true;  // 이미 ACTIVE도 성공으로 처리
+        } else {
+            log.warn("Failed to activate token: concertId={}, userId={} (token not found or invalid state)",
+                    concertId, userId);
+            return false;
+        }
+    }
+
+    @Override
     public List<String> getActiveConcertIds() {
         Set<String> concertIds = new HashSet<>();
 
         // SCAN을 사용하여 안전하게 키 조회 (KEYS 명령어 금지)
         redisTemplate.execute((org.springframework.data.redis.core.RedisCallback<Object>) connection -> {
-            // Wait Queue 스캔
-            org.springframework.data.redis.core.ScanOptions waitOptions = org.springframework.data.redis.core.ScanOptions
-                    .scanOptions()
-                    .match(RedisKeyGenerator.waitQueuePattern())
-                    .count(SCAN_COUNT)
-                    .build();
+            org.springframework.data.redis.core.Cursor<byte[]> waitCursor = null;
+            org.springframework.data.redis.core.Cursor<byte[]> activeCursor = null;
 
-            org.springframework.data.redis.core.Cursor<byte[]> waitCursor = connection.scan(waitOptions);
+            try {
+                // Wait Queue 스캔
+                org.springframework.data.redis.core.ScanOptions waitOptions = org.springframework.data.redis.core.ScanOptions
+                        .scanOptions()
+                        .match(RedisKeyGenerator.waitQueuePattern())
+                        .count(SCAN_COUNT)
+                        .build();
 
-            while (waitCursor.hasNext()) {
-                String key = new String(waitCursor.next());
-                concertIds.add(RedisKeyGenerator.extractConcertId(key, "queue:wait:"));
-            }
+                waitCursor = connection.scan(waitOptions);
 
-            // Active Queue 스캔
-            org.springframework.data.redis.core.ScanOptions activeOptions = org.springframework.data.redis.core.ScanOptions
-                    .scanOptions()
-                    .match(RedisKeyGenerator.activeQueuePattern())
-                    .count(SCAN_COUNT)
-                    .build();
+                while (waitCursor.hasNext()) {
+                    String key = new String(waitCursor.next());
+                    concertIds.add(RedisKeyGenerator.extractConcertId(key, "queue:wait:"));
+                }
 
-            org.springframework.data.redis.core.Cursor<byte[]> activeCursor = connection.scan(activeOptions);
+                // Active Queue 스캔
+                org.springframework.data.redis.core.ScanOptions activeOptions = org.springframework.data.redis.core.ScanOptions
+                        .scanOptions()
+                        .match(RedisKeyGenerator.activeQueuePattern())
+                        .count(SCAN_COUNT)
+                        .build();
 
-            while (activeCursor.hasNext()) {
-                String key = new String(activeCursor.next());
-                concertIds.add(RedisKeyGenerator.extractConcertId(key, "queue:active:"));
+                activeCursor = connection.scan(activeOptions);
+
+                while (activeCursor.hasNext()) {
+                    String key = new String(activeCursor.next());
+                    concertIds.add(RedisKeyGenerator.extractConcertId(key, "queue:active:"));
+                }
+
+            } finally {
+                // Cursor 리소스 정리
+                if (waitCursor != null) {
+                    try {
+                        waitCursor.close();
+                    } catch (Exception e) {
+                        log.warn("Failed to close wait queue cursor", e);
+                    }
+                }
+                if (activeCursor != null) {
+                    try {
+                        activeCursor.close();
+                    } catch (Exception e) {
+                        log.warn("Failed to close active queue cursor", e);
+                    }
+                }
             }
 
             return null;

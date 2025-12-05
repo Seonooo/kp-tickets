@@ -113,6 +113,25 @@ public interface QueueRepository {
     void removeFromWaitQueue(String concertId, String userId);
 
     /**
+     * Wait Queue에서 Pop하고 Active Queue에 원자적으로 추가
+     * 실패 시 자동 롤백으로 데이터 손실 방지
+     * @param concertId 콘서트 ID
+     * @param count 전환할 인원 수
+     * @param expiredAt 만료 시간 (READY 상태)
+     * @return 성공적으로 이동된 유저 ID 리스트
+     */
+    List<String> moveToActiveQueueAtomic(String concertId, int count, Instant expiredAt);
+
+    /**
+     * READY → ACTIVE 상태 전환 및 만료 시간 갱신을 원자적으로 처리
+     * @param concertId 콘서트 ID
+     * @param userId 유저 ID
+     * @param newExpiredAt 새로운 만료 시간 (ACTIVE 상태)
+     * @return true: 성공, false: 실패 (토큰 없음 또는 이미 ACTIVE)
+     */
+    boolean activateTokenAtomic(String concertId, String userId, Instant newExpiredAt);
+
+    /**
      * 활성화된 콘서트 ID 목록 조회
      * Wait Queue 또는 Active Queue에 데이터가 있는 콘서트
      * @return 콘서트 ID 리스트

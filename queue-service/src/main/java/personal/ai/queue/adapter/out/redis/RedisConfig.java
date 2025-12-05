@@ -44,4 +44,32 @@ public class RedisConfig {
                 "scripts/remove_expired_tokens.lua");
         return org.springframework.data.redis.core.script.RedisScript.of(scriptSource, Long.class);
     }
+
+    @Bean
+    public org.springframework.data.redis.core.script.RedisScript<Long> updateTokenExpirationScript() {
+        org.springframework.core.io.ClassPathResource scriptSource = new org.springframework.core.io.ClassPathResource(
+                "scripts/update_token_expiration.lua");
+        return org.springframework.data.redis.core.script.RedisScript.of(scriptSource, Long.class);
+    }
+
+    @Bean
+    public org.springframework.data.redis.core.script.RedisScript<Long> removeFromActiveQueueScript() {
+        org.springframework.core.io.ClassPathResource scriptSource = new org.springframework.core.io.ClassPathResource(
+                "scripts/remove_from_active_queue.lua");
+        return org.springframework.data.redis.core.script.RedisScript.of(scriptSource, Long.class);
+    }
+
+    @Bean
+    public org.springframework.data.redis.core.script.RedisScript<String> moveToActiveQueueScript() {
+        org.springframework.core.io.ClassPathResource scriptSource = new org.springframework.core.io.ClassPathResource(
+                "scripts/move_to_active_queue.lua");
+        return org.springframework.data.redis.core.script.RedisScript.of(scriptSource, String.class);
+    }
+
+    @Bean
+    public org.springframework.data.redis.core.script.RedisScript<Long> activateTokenScript() {
+        org.springframework.core.io.ClassPathResource scriptSource = new org.springframework.core.io.ClassPathResource(
+                "scripts/activate_token.lua");
+        return org.springframework.data.redis.core.script.RedisScript.of(scriptSource, Long.class);
+    }
 }

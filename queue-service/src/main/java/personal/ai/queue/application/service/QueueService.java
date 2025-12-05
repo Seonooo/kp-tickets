@@ -118,7 +118,7 @@ public class QueueService implements
         log.info("Activating token: concertId={}, userId={}",
                 command.concertId(), command.userId());
 
-        // Active Token 조회
+        // Active Token 조회 (토큰 값 획득용)
         QueueToken token = queueRepository.getActiveToken(
                         command.concertId(),
                         command.userId())
@@ -134,24 +134,21 @@ public class QueueService implements
             return token;
         }
 
-        // READY -> ACTIVE 전환 및 TTL 10분으로 연장
+        // READY -> ACTIVE 전환 및 만료 시간 갱신 (원자적)
         Instant newExpiration = domainService.calculateActiveExpiration();
-
-        // 상태 변경: READY -> ACTIVE
-        queueRepository.updateTokenStatus(
-                command.concertId(),
-                command.userId(),
-                QueueStatus.ACTIVE
-        );
-
-        // 만료 시간 갱신
-        queueRepository.updateTokenExpiration(
+        boolean success = queueRepository.activateTokenAtomic(
                 command.concertId(),
                 command.userId(),
                 newExpiration
         );
 
-        log.info("Token activated: concertId={}, userId={}, expiredAt={}",
+        if (!success) {
+            log.error("Failed to activate token atomically: concertId={}, userId={}",
+                    command.concertId(), command.userId());
+            throw new QueueTokenNotFoundException(command.concertId(), command.userId());
+        }
+
+        log.info("Token activated atomically: concertId={}, userId={}, expiredAt={}",
                 command.concertId(), command.userId(), newExpiration);
 
         return QueueToken.active(

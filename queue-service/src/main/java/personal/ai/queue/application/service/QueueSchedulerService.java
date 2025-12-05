@@ -43,35 +43,24 @@ public class QueueSchedulerService implements
             return 0;
         }
 
-        // Wait Queue에서 Pop
-        List<String> userIds = queueRepository.popFromWaitQueue(concertId, availableSlots);
+        // Wait Queue에서 Pop하고 Active Queue에 원자적으로 추가
+        // Lua Script로 처리하여 데이터 손실 방지
+        Instant expiration = domainService.calculateReadyExpiration();
+        List<String> movedUserIds = queueRepository.moveToActiveQueueAtomic(
+                concertId,
+                availableSlots,
+                expiration
+        );
 
-        if (userIds.isEmpty()) {
-            log.debug("No users waiting: concertId={}", concertId);
+        if (movedUserIds.isEmpty()) {
+            log.debug("No users moved: concertId={}", concertId);
             return 0;
         }
 
-        // Active Queue에 추가 (READY 상태, TTL 5분)
-        Instant expiration = domainService.calculateReadyExpiration();
-        int movedCount = 0;
+        log.info("Moved users to active queue atomically: concertId={}, moved={}, available={}",
+                concertId, movedUserIds.size(), availableSlots);
 
-        for (String userId : userIds) {
-            try {
-                String token = domainService.generateToken();
-                queueRepository.addToActiveQueue(concertId, userId, token, expiration);
-                movedCount++;
-                log.info("User moved to active queue: concertId={}, userId={}, token={}",
-                        concertId, userId, token);
-            } catch (Exception e) {
-                log.error("Failed to move user to active queue: concertId={}, userId={}",
-                        concertId, userId, e);
-            }
-        }
-
-        log.info("Moved users to active queue: concertId={}, moved={}, available={}",
-                concertId, movedCount, availableSlots);
-
-        return movedCount;
+        return movedUserIds.size();
     }
 
     @Override
