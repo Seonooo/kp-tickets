@@ -23,7 +23,14 @@ end
 
 -- 4. Batch delete with UNLINK (non-blocking, asynchronous)
 if #tokenKeys > 0 then
-    redis.call('UNLINK', unpack(tokenKeys))
+     local batchSize = 1000
+             for i = 1, #tokenKeys, batchSize do
+                 local batch = {}
+                 for j = i, math.min(i + batchSize - 1, #tokenKeys) do
+                    batch[#batch + 1] = tokenKeys[j]
+                 end
+                 redis.call('UNLINK', unpack(batch))
+             end
 end
 
 return #expiredUserIds
