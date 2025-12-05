@@ -7,6 +7,8 @@ import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.stereotype.Component;
 import personal.ai.core.booking.domain.service.BookingManager;
 
+import java.nio.charset.StandardCharsets;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -17,7 +19,7 @@ public class RedisExpirationListener implements MessageListener {
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
-        String expiredKey = message.toString();
+        String expiredKey = new String(message.getBody(), StandardCharsets.UTF_8);
         log.info("Redis key expired: {}", expiredKey);
 
         if (expiredKey.startsWith(RESERVATION_PREFIX)) {
@@ -32,7 +34,7 @@ public class RedisExpirationListener implements MessageListener {
     private void handleReservationExpiration(String expiredKey) {
         try {
             // reservation:123 -> 123
-            String reservationIdStr = expiredKey.replace(RESERVATION_PREFIX, "");
+            String reservationIdStr = expiredKey.substring(RESERVATION_PREFIX.length());
             Long reservationId = Long.parseLong(reservationIdStr);
 
             log.info("Processing reservation expiration: reservationId={}", reservationId);
