@@ -32,7 +32,7 @@ public class ReservationPersistenceAdapter implements ReservationRepository {
         ReservationEntity saved = jpaReservationRepository.save(entity);
 
         // 2. Outbox 이벤트 저장 (같은 트랜잭션 내 - 원자성 보장)
-        //    Domain/Application Layer는 이 과정을 모름
+        // Domain/Application Layer는 이 과정을 모름
         saveOutboxEvent(saved.toDomain());
 
         return saved.toDomain();
@@ -43,7 +43,13 @@ public class ReservationPersistenceAdapter implements ReservationRepository {
      */
     private void saveOutboxEvent(Reservation reservation) {
         try {
-            OutboxEventEntity outboxEvent = outboxEventFactory.createReservationCreatedEvent(reservation);
+            OutboxEventEntity outboxEvent = switch (reservation.status()) {
+                case PENDING -> outboxEventFactory.createReservationCreatedEvent(reservation);
+                case CONFIRMED -> outboxEventFactory.createReservationConfirmedEvent(reservation);
+                case CANCELLED -> outboxEventFactory.createReservationCancelledEvent(reservation);
+                case EXPIRED -> outboxEventFactory.createReservationExpiredEvent(reservation);
+            };
+
             jpaOutboxEventRepository.save(outboxEvent);
             log.debug("Outbox event saved: reservationId={}", reservation.id());
         } catch (Exception e) {

@@ -23,7 +23,35 @@ public class OutboxEventFactory {
     /**
      * Reservation을 OutboxEventEntity로 변환
      */
+    /**
+     * Reservation을 OutboxEventEntity로 변환 (Created)
+     */
     public OutboxEventEntity createReservationCreatedEvent(Reservation reservation) {
+        return createEvent(reservation, "RESERVATION_CREATED");
+    }
+
+    /**
+     * Reservation을 OutboxEventEntity로 변환 (Confirmed)
+     */
+    public OutboxEventEntity createReservationConfirmedEvent(Reservation reservation) {
+        return createEvent(reservation, "RESERVATION_CONFIRMED");
+    }
+
+    /**
+     * Reservation을 OutboxEventEntity로 변환 (Cancelled)
+     */
+    public OutboxEventEntity createReservationCancelledEvent(Reservation reservation) {
+        return createEvent(reservation, "RESERVATION_CANCELLED");
+    }
+
+    /**
+     * Reservation을 OutboxEventEntity로 변환 (Expired)
+     */
+    public OutboxEventEntity createReservationExpiredEvent(Reservation reservation) {
+        return createEvent(reservation, "RESERVATION_EXPIRED");
+    }
+
+    private OutboxEventEntity createEvent(Reservation reservation, String eventType) {
         try {
             // DTO 생성 (Domain Model만 사용)
             ReservationCreatedEvent event = new ReservationCreatedEvent(
@@ -40,10 +68,10 @@ public class OutboxEventFactory {
             return OutboxEventEntity.create(
                     "RESERVATION",
                     reservation.id(),
-                    "RESERVATION_CREATED",
+                    eventType,
                     payload);
         } catch (Exception e) {
-            log.error("Failed to create outbox event: reservationId={}", reservation.id(), e);
+            log.error("Failed to create outbox event: reservationId={}, eventType={}", reservation.id(), eventType, e);
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "Failed to create outbox event");
         }
     }
