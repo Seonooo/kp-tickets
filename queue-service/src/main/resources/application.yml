@@ -50,10 +50,10 @@ queue:
     fast-interval-ms: ${QUEUE_POLLING_FAST_INTERVAL:3000}      # 빠른 폴링 간격 (3초)
     slow-interval-ms: ${QUEUE_POLLING_SLOW_INTERVAL:10000}     # 느린 폴링 간격 (10초)
     fast-threshold: ${QUEUE_POLLING_FAST_THRESHOLD:1000}       # 빠른 폴링 기준 순번
-    min-interval-ms: ${QUEUE_POLLING_MIN_INTERVAL:2000}        # Rate Limit 최소 간격 (2초)
-    rate-limit-capacity: ${QUEUE_POLLING_RATE_LIMIT_CAPACITY:3}     # Rate Limit 용량 (3회)
-    rate-limit-refill-tokens: ${QUEUE_POLLING_RATE_LIMIT_REFILL:1}  # Rate Limit 리필 토큰 (1개)
-    rate-limit-refill-duration-seconds: ${QUEUE_POLLING_RATE_LIMIT_DURATION:2}  # Rate Limit 리필 주기 (2초)
+    min-interval-ms: ${QUEUE_POLLING_MIN_INTERVAL:2000}        # 클라이언트 권장 최소 폴링 간격 (2초)
+    # Token Bucket Rate Limiting
+    rate-limit-capacity: ${QUEUE_POLLING_RATE_LIMIT_CAPACITY:10}    # 버킷 최대 용량 (10개)
+    rate-limit-refill-rate: ${QUEUE_POLLING_RATE_LIMIT_REFILL:0.5}  # 초당 리필 토큰 수 (0.5 = 2초당 1개)
     executor-pool-size: ${QUEUE_POLLING_EXECUTOR_POOL_SIZE:10}      # Virtual Thread Executor 풀 크기
 
 # Kafka Topic 설정

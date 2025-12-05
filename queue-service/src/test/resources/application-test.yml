@@ -26,9 +26,8 @@ queue:
     slow-interval-ms: 10000
     fast-threshold: 1000
     min-interval-ms: 2000
-    rate-limit-capacity: 3
-    rate-limit-refill-tokens: 1
-    rate-limit-refill-duration-seconds: 2
+    rate-limit-capacity: 10
+    rate-limit-refill-rate: 0.5
     executor-pool-size: 10
 
 # Kafka Topic 설정

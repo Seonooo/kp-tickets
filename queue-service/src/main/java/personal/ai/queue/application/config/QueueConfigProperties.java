@@ -28,8 +28,7 @@ public record QueueConfigProperties(
             int fastThreshold,
             long minIntervalMs,
             int rateLimitCapacity,
-            int rateLimitRefillTokens,
-            int rateLimitRefillDurationSeconds,
+            double rateLimitRefillRate,  // Token Bucket: 초당 리필 토큰 수
             int executorPoolSize
     ) {}
 }
