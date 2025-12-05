@@ -4,10 +4,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import personal.ai.core.booking.adapter.out.persistence.OutboxEventEntity;
 import personal.ai.core.booking.application.port.in.PublishPendingEventsUseCase;
 import personal.ai.core.booking.application.port.out.OutboxEventRepository;
 import personal.ai.core.booking.application.port.out.ReservationEventPublisher;
+import personal.ai.core.booking.domain.model.OutboxEvent;
 
 import java.util.List;
 
@@ -26,37 +26,39 @@ public class OutboxEventService implements PublishPendingEventsUseCase {
     @Override
     @Transactional
     public int publishPendingEvents() {
-        List<OutboxEventEntity> pendingEvents = outboxEventRepository.findPendingEvents();
+        List<OutboxEvent> pendingEvents = outboxEventRepository.findPendingEvents();
         int publishedCount = 0;
 
-        for (OutboxEventEntity event : pendingEvents) {
+        for (OutboxEvent event : pendingEvents) {
             try {
-                String topic = mapEventTypeToTopic(event.getEventType());
+                String topic = mapEventTypeToTopic(event.eventType());
 
                 // Key: Aggregate ID (reservationId) to ensure ordering
-                String key = String.valueOf(event.getAggregateId());
+                String key = String.valueOf(event.aggregateId());
 
-                log.debug("Publishing event: id={}, type={}, topic={}", event.getId(), event.getEventType(), topic);
+                log.debug("Publishing event: id={}, type={}, topic={}", event.id(), event.eventType(), topic);
 
                 // Publish Raw Payload directly
-                eventPublisher.publishRaw(topic, key, event.getPayload());
+                eventPublisher.publishRaw(topic, key, event.payload());
 
-                event.markAsPublished(); // Update Status
-                outboxEventRepository.save(event);
+                // Update Status (Immutable)
+                OutboxEvent publishedEvent = event.markAsPublished();
+                outboxEventRepository.save(publishedEvent);
                 publishedCount++;
 
             } catch (Exception e) {
-                log.error("Failed to publish event: id={}", event.getId(), e);
-                event.incrementRetryCount();
+                log.error("Failed to publish event: id={}", event.id(), e);
 
-                if (event.getRetryCount() >= 3) { // MAX_RETRY_COUNT (should match Adapter's query)
-                    event.markAsFailed();
+                // Retry Logic (Immutable)
+                OutboxEvent retriedEvent = event.incrementRetryCount();
+
+                if (retriedEvent.retryCount() >= 3) { // MAX_RETRY_COUNT
+                    retriedEvent = retriedEvent.markAsFailed();
                 }
 
-                outboxEventRepository.save(event);
+                outboxEventRepository.save(retriedEvent);
             }
         }
-
         return publishedCount;
     }
 

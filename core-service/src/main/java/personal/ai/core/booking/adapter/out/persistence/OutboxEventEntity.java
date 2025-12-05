@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import personal.ai.core.booking.domain.model.OutboxEvent;
 
 import java.time.LocalDateTime;
 
@@ -63,7 +64,7 @@ public class OutboxEventEntity {
     /**
      * Domain 모델로부터 Entity 생성
      */
-    public static OutboxEventEntity fromDomain(personal.ai.core.booking.domain.model.OutboxEvent domain) {
+    public static OutboxEventEntity fromDomain(OutboxEvent domain) {
         OutboxEventEntity entity = new OutboxEventEntity();
         entity.id = domain.id();
         entity.aggregateType = domain.aggregateType();
@@ -87,39 +88,28 @@ public class OutboxEventEntity {
         }
     }
 
-    public void markAsPublished() {
-        this.status = OutboxEventStatus.PUBLISHED;
-        this.publishedAt = LocalDateTime.now();
-    }
-
-    public void markAsFailed() {
-        this.status = OutboxEventStatus.FAILED;
-        this.retryCount++;
-    }
-
-    public void incrementRetryCount() {
-        this.retryCount++;
-    }
+    // Entity 내부 메서드 제거 (Domain 로직으로 이동)
+    // markAsPublished, markAsFailed, incrementRetryCount 제거
 
     /**
      * Domain 모델로 변환
      */
-    public personal.ai.core.booking.domain.model.OutboxEvent toDomain() {
-        return new personal.ai.core.booking.domain.model.OutboxEvent(
+    public OutboxEvent toDomain() {
+        return new OutboxEvent(
                 id,
                 aggregateType,
                 aggregateId,
                 eventType,
                 payload,
-                personal.ai.core.booking.domain.model.OutboxEvent.OutboxEventStatus.valueOf(status.name()),
+                OutboxEvent.OutboxStatus.valueOf(status.name()),
+                retryCount,
                 createdAt,
-                publishedAt,
-                retryCount);
+                publishedAt);
     }
 
     public enum OutboxEventStatus {
-        PENDING, // 발행 대기
-        PUBLISHED, // 발행 완료
-        FAILED // 발행 실패
+        PENDING,
+        PUBLISHED,
+        FAILED
     }
 }
