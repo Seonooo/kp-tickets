@@ -2,6 +2,12 @@ spring:
   application:
     name: queue-service
 
+  # Virtual Threads 활성화 (Java 21 필수 기능)
+  # 대규모 동시 접속 처리에 최적화
+  threads:
+    virtual:
+      enabled: true
+
   data:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}

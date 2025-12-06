@@ -2,6 +2,12 @@ spring:
   application:
     name: core-service
 
+  # Virtual Threads 활성화 (Java 21 필수 기능)
+  # I/O 바운드 작업이 많은 티켓팅 서비스 특성상 성능 대폭 향상
+  threads:
+    virtual:
+      enabled: true
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/concert_core?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul}
     username: ${SPRING_DATASOURCE_USERNAME:root}
