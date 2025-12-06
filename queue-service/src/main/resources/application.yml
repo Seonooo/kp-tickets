@@ -34,6 +34,8 @@ spring:
 
 server:
   port: ${SERVER_PORT:8081}
+  http2:
+    enabled: true
 
 # Queue 설정
 queue:

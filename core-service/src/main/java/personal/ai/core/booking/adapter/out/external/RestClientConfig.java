@@ -12,6 +12,20 @@ import java.time.Duration;
 /**
  * RestClient Configuration
  * Spring Boot 3.4 RestClient 설정
+ * package personal.ai.core.booking.adapter.out.external;
+ * 
+ * import org.springframework.beans.factory.annotation.Value;
+ * import org.springframework.context.annotation.Bean;
+ * import org.springframework.context.annotation.Configuration;
+ * import org.springframework.http.client.JdkClientHttpRequestFactory;
+ * import org.springframework.web.client.RestClient;
+ * 
+ * import java.net.http.HttpClient;
+ * import java.time.Duration;
+ * 
+ * /**
+ * RestClient Configuration
+ * Spring Boot 3.4 RestClient 설정
  * Virtual Thread는 Spring Boot 3.2+에서 자동으로 적용됨
  */
 @Configuration
@@ -25,9 +39,9 @@ public class RestClientConfig {
 
     @Bean
     public RestClient queueServiceRestClient() {
-        // HttpClient 생성 (HTTP/1.1 사용 - Tomcat 호환성 및 안정성)
+        // HttpClient 생성 (HTTP/2 지원)
         HttpClient httpClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
+                .version(HttpClient.Version.HTTP_2)
                 .connectTimeout(Duration.ofSeconds(timeoutSeconds)) // TCP 연결 타임아웃
                 .build();
 

@@ -65,6 +65,8 @@ external:
 
 server:
   port: ${SERVER_PORT:8080}
+  http2:
+    enabled: true
 
 management:
   endpoints:
