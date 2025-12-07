@@ -13,6 +13,6 @@ import org.springframework.test.context.ActiveProfiles;
 @CucumberContextConfiguration
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-@Import(TestContainersConfiguration.class)
+@Import({ TestContainersConfiguration.class, QueueHttpAdapter.class })
 public class CucumberSpringConfiguration {
 }
