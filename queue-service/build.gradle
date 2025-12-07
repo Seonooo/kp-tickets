@@ -24,4 +24,8 @@ dependencies {
 
     // RestAssured
     testImplementation 'io.rest-assured:rest-assured:5.4.0'
+
+    // Awaitility (비동기 상태 대기용)
+    testImplementation 'org.awaitility:awaitility:4.2.0'
 }
+
