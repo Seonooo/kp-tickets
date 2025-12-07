@@ -39,7 +39,8 @@ public class QueueAcceptanceSteps {
     private Response lastResponse;
 
     // 동시성 테스트용
-    private List<Response> concurrentResponses = new ArrayList<>();
+    private final List<Response> concurrentResponses = new ArrayList<>();
+    private int concurrentRequestCount;
 
     // ==========================================
     // 배경: 새로운 사용자
@@ -109,6 +110,7 @@ public class QueueAcceptanceSteps {
     public void multipleUsersRequestRegistration(int count) {
         log.info(">>> {}명 동시 대기열 등록 요청 (Virtual Thread)", count);
 
+        this.concurrentRequestCount = count;
         concurrentResponses.clear();
 
         // Java 21 Virtual Thread로 진정한 동시 요청
@@ -117,7 +119,6 @@ public class QueueAcceptanceSteps {
 
             for (int i = 0; i < count; i++) {
                 String uniqueUserId = "USER-" + i + "-" + UUID.randomUUID().toString().substring(0, 4);
-
                 Future<Response> future = executor.submit(() -> httpAdapter.enterQueue(concertId, uniqueUserId));
                 futures.add(future);
             }
@@ -127,12 +128,12 @@ public class QueueAcceptanceSteps {
                 try {
                     concurrentResponses.add(future.get());
                 } catch (Exception e) {
-                    log.error("동시 요청 실패", e);
+                    throw new AssertionError("동시 대기열 등록 중 하나 이상의 요청이 실패했습니다.", e);
                 }
             }
         }
 
-        log.info(">>> 동시 등록 완료: {} 응답 수신", concurrentResponses.size());
+        log.info(">>> 동시 등록 완료: 성공={}/{}", concurrentResponses.size(), concurrentRequestCount);
     }
 
     @When("나의 대기 상태를 확인한다")
@@ -175,6 +176,10 @@ public class QueueAcceptanceSteps {
     @Then("모든 사용자의 등록이 완료된다")
     public void allUsersRegistrationCompleted() {
         log.info(">>> 모든 사용자 등록 완료 검증");
+
+        // 기대한 수만큼 응답이 왔는지 먼저 검증
+        assertThat(concurrentResponses).hasSize(concurrentRequestCount);
+
         for (Response response : concurrentResponses) {
             assertThat(response.statusCode()).isEqualTo(201);
         }
@@ -198,7 +203,7 @@ public class QueueAcceptanceSteps {
 
         long uniqueCount = positions.stream().distinct().count();
         log.info(">>> 고유 순번 검증 - total={}, unique={}", positions.size(), uniqueCount);
-        assertThat(uniqueCount).isEqualTo(positions.size());
+        assertThat(uniqueCount).isEqualTo(concurrentRequestCount);
     }
 
     @Then("현재 대기 중임을 알 수 있다")
