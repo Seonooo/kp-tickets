@@ -3,7 +3,8 @@ spring:
     name: core-service-test
 
   # Testcontainers @ServiceConnection이 자동으로 설정
-  # application.properties는 필요 없음
+  # Kafka bootstrap-servers는 KafkaContainer가 제공하는 동적 주소 사용
+  # main application.yml의 환경변수 기본값을 override
 
 server:
   port: 0  # 랜덤 포트 사용 (테스트 시)
@@ -13,3 +14,4 @@ logging:
     root: INFO
     personal.ai.core: DEBUG
     org.testcontainers: INFO
+    org.apache.kafka: WARN

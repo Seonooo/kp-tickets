@@ -67,6 +67,27 @@ erDiagram
         datetime approved_at
     }
 
+    %% Outbox Pattern (Event consistency)
+    OUTBOX_EVENTS {
+        bigint id PK
+        varchar aggregate_type
+        bigint aggregate_id
+        varchar event_type
+        text payload
+        varchar status "PENDING, PUBLISHED"
+        datetime created_at
+    }
+
+    PAYMENT_OUTBOX_EVENTS {
+        bigint id PK
+        varchar aggregate_type
+        bigint aggregate_id
+        varchar event_type
+        text payload
+        varchar status "PENDING, PUBLISHED"
+        datetime created_at
+    }
+
     CONCERT ||--|{ CONCERT_SCHEDULE : has
     CONCERT_SCHEDULE ||--|{ SEAT : contains
     BOOKING ||--|| PAYMENT : triggers
@@ -98,6 +119,15 @@ erDiagram
     - **보장사항:** 특정 회차의 특정 좌석에 대해 단 하나의 활성 Booking만 존재 가능.
     - **효과:** Redis 장애/Eviction 등 예외 상황에서도 DB가 데이터 정합성 보장.
 - **Index:** `idx_user_status` (`user_id`, `status`) - 사용자별 예약 내역 조회 최적화.
+
+#### D. Outbox Tables (`outbox_events`, `payment_outbox_events`)
+
+- **Role:** Transactional Outbox Pattern 구현을 위한 이벤트 저장소.
+- **Mechanism:**
+    - 트랜잭션 커밋 시 이벤트를 함께 저장하여 원자성(Atomicity) 보장.
+    - Kafka 메시지 발행 성공 시 `PUBLISHED` 상태로 변경.
+- **Index:** `idx_status_created` (`status`, `created_at`) - 미발행 이벤트 폴링 최적화.
+
 
 -----
 

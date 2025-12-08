@@ -66,11 +66,12 @@
 - **Interface:** **`RestClient`** (Spring Framework 6.1+ / Boot 3.2+)
 - **Why:** `RestTemplate`은 유지보수 모드이며, `WebClient`는 Reactive 의존성(Netty)을 가져오므로, 가상 스레드 친화적인 `RestClient`를 표준으로 사용한다.
 
-### 3.3 Resilience & Fault Tolerance
+### 3.3 Resilience & Fault Tolerance (Planned)
 - **Library:** **Resilience4j** (Spring Boot 3 Starter)
 - **Target:** 외부 API 호출 (`PaymentMockService`, `RestClient`)
 - **Modules:** `Retry`, `CircuitBreaker`
 - **Annotation:** `@Retry`, `@CircuitBreaker` (AOP 기반 적용)
+- *Note: 현재 구현 단계에서는 미적용 상태임.*
 
 ---
 
@@ -103,14 +104,13 @@
 
 ---
 
-## 6. Security Specification
+## 6. Security Specification (Mock)
 
-- **Framework:** Spring Security 6.x
-- **Authentication:** JWT (Json Web Token)
-    - Signature Algorithm: HS256 or RS256
-- **Architecture:** Stateless (`SessionCreationPolicy.STATELESS`)
-- **Filter Chain:**
-    - `JwtAuthenticationFilter` (Custom) -> `UsernamePasswordAuthenticationFilter` 이전에 배치.
-- **Handling:**
-    - `AuthenticationEntryPoint` -> 401 Unauthorized (JSON)
-    - `AccessDeniedHandler` -> 403 Forbidden (JSON)
+- **Strategy:** **Header-Based Mock Authentication**
+- **Rationale:** MVP 단계의 복잡도 제어를 위해 실제 인증(JWT) 대신 **Trusted Gateway** 패턴을 가정한다.
+- **Mechanism:**
+    - 모든 요청은 API Gateway(또는 앞단)에서 이미 인증되었다고 가정한다.
+    - `X-User-Id` 헤더를 신뢰하여 유저를 식별한다.
+    - 별도의 검증 로직이나 `Spring Security` 필터 체인은 사용하지 않는다.
+- **Future Work:**
+    - Spring Security 도입 및 JWT 검증 로직 구현.

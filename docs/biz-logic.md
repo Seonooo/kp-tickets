@@ -42,7 +42,7 @@
 ### 2.2 Payment (Mocking)
 실제 PG사 연동 대신 `PaymentMockService`를 통해 결제를 시뮬레이션한다.
 - **Simulation Logic:**
-    - 랜덤하게 **80% 성공**, **20% 실패**를 반환하도록 구현한다.
+    - 성공률은 100%를 반환하도록 한다.
     - 네트워크 지연(Latency)을 시뮬레이션하기 위해 **500ms ~ 1s의 딜레이**를 임의로 부여한다. (추후 변경 가능)
 - **Post-Payment Action:**
     - **Success:**
@@ -57,9 +57,9 @@
 
 ## 3. User Domain Policy
 
-### 3.1 Authentication
-- **Access Token:** 유효기간 **30분**.
-- **Login:** 이메일/비밀번호 기반 로그인 (Mock 데이터 사용 가능).
+### 3.1 Authentication (Mock)
+- **Method:** `X-User-Id` Header.
+- **Role:** 별도의 로그인 과정 없이 헤더에 포함된 ID를 신뢰하여 인증 처리한다.
 - **User Profile:** 결제 시 유저 식별자(`userId`) 외에 별도의 포인트 잔액 확인이나 등급 조회 로직은 포함하지 않는다. (순수 인증/프로필 역할)
 
 ---

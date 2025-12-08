@@ -10,14 +10,14 @@ import java.util.Random;
  * 실제 PG 연동 없이 결제를 시뮬레이션
  *
  * Business Logic:
- * - 80% 성공, 20% 실패
+ * - 100% 성공 (Happy path 테스트 중심)
  * - 500ms ~ 1s 랜덤 딜레이 (네트워크 지연 시뮬레이션)
  */
 @Slf4j
 @Service
 public class PaymentMockService {
 
-    private static final double SUCCESS_RATE = 0.8;
+    private static final double SUCCESS_RATE = 1.0; // Happy path: 100% 성공
     private static final int MIN_DELAY_MS = 500;
     private static final int MAX_DELAY_MS = 1000;
 

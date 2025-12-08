@@ -166,10 +166,34 @@ public record ApiResponse<T>(
 - **BDD Style:** `Given` / `When` / `Then` 주석 패턴을 준수한다.
 - **Coverage:** 커버리지 수치보다 **중요 비즈니스 로직(Happy Path + Edge Case)** 검증에 집중한다.
 
-### 6.2 Tools
+
+### 6.2 Test Code Conventions (Acceptance Test)
+
+**Package Structure:**
+```text
+src/test/java/.../acceptance
+├── steps        # Cucumber Step Definitions
+└── support      # Test Adapters & Configuration
+src/test/resources/features
+└── *-acceptance.feature
+```
+
+**Naming Rules:**
+- **Feature File:** `*-acceptance.feature` (e.g., `booking-acceptance.feature`)
+- **Step Class:** `*AcceptanceSteps` (e.g., `BookingAcceptanceSteps`)
+- **Http Adapter:** `*HttpAdapter` (Pure HTTP Client for User Action)
+- **Test Adapter:** `*TestAdapter` (Helper for Data Setup/Verify)
+
+**Implementation Rules:**
+- **Black-Box:** `HttpAdapter`는 내부 로직이나 Repository에 접근하지 않고 **오직 HTTP**로만 통신한다.
+- **Isolation:** 각 시나리오는 서로 격리되어야 하며(`@ScenarioScope`), 데이터 초기화는 `TestAdapter`를 통해 수행한다.
+- **Concurrency:** 동시성 테스트는 Java 21 **Virtual Threads**를 활용한다.
+
+### 6.3 Tools
 
 - **Unit Test:** JUnit 5, AssertJ, Mockito
 - **Integration Test:** `@SpringBootTest`, **Testcontainers** (Redis, MySQL, Kafka)
+- **Acceptance Test:** Cucumber, RestAssured
 - **Load Test:** k6 (API Level), nGrinder (Scenario Level)
 
 ---
@@ -213,16 +237,14 @@ public record ApiResponse<T>(
 
 ## 9. Security Conventions
 
-### 9.1 Spring Security 6.x
+## 9. Security Conventions (Mock)
 
-- **Configuration:** `SecurityFilterChain` Bean과 Lambda DSL을 사용한다. (`WebSecurityConfigurerAdapter` 금지)
-- **Policy:** `SessionCreationPolicy.STATELESS`를 필수적으로 적용한다.
+### 9.1 Mock Authentication Strategy (MVP)
 
-### 9.2 JWT Filter Strategy
-
-- **Implementation:** `OncePerRequestFilter`를 확장하여 구현한다.
-- **Failure Handling:** 인증 실패(401) 시 HTML 로그인 페이지로 리다이렉트되지 않도록, **`ApiResponse` 포맷의 JSON을 반환**한다.
-
-### 9.3 Context Propagation
-
-- **Async/Virtual Thread:** 비동기 작업 시 SecurityContext가 유실되므로, **`DelegatingSecurityContextExecutor`**를 사용하여 컨텍스트를 명시적으로 전파한다.
+- **Principle:** 유저 인증은 API Gateway 등 앞단에서 이미 수행되었다고 가정한다.
+- **Implementation:**
+    - `X-User-Id` 헤더를 신뢰하여 `Long` 타입의 User ID로 파싱한다.
+    - 별도의 `SecurityContext`나 `Filter Chain`을 통한 검증을 생략한다.
+- **Constraint:**
+    - 프로덕션 코드에 하드코딩된 유저 정보나 비밀번호를 포함하지 않는다.
+    - 추후 Spring Security 도입 시 영향을 최소화하도록 컨트롤러에서만 헤더를 참조한다.

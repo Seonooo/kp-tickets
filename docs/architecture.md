@@ -131,10 +131,12 @@
 
 ---
 
-## 5. Resilience & Fault Tolerance Strategy
+## 5. Resilience & Fault Tolerance Strategy (Planned)
 
 대규모 트래픽 상황에서 외부 시스템(PG사)의 지연이 전체 시스템의 마비로 전이되는 것을 막기 위해 **Fail-Fast** 전략을 채택한다.
 **데이터 정합성**을 최우선으로 하여 "Zombie Request(결과를 모르는 요청)"를 원천 차단한다.
+
+*Note: 본 섹션은 향후 고도화 단계에서 적용될 설계 전략이며, 현재 MVP 단계에는 미적용 상태이다.*
 
 ### 5.1 Retry Strategy (재시도 정책)
 - **Target:** `PaymentMockService` (외부 결제 요청)

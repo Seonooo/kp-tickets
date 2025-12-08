@@ -249,3 +249,31 @@ src/test/
 # 전체 테스트 실행
 ./gradlew :queue-service:test
 ```
+
+---
+
+## 3. Booking Service 인수 테스트 설계
+
+Booking Service 역시 Queue Service와 동일한 철학을 따르되, 복잡한 데이터 의존성을 해결하기 위해 **Two-Adapter Pattern**을 명시적으로 도입한다.
+
+### 3.1 Adapter 역할 분리 (Two-Adapter Pattern)
+
+| Adapter | 역할 | 사용 예시 | 의존성 |
+|:---|:---|:---|:---|
+| **BookingHttpAdapter** | **API 호출 (User Action)** | `.reserveSeat()` | `RestAssured` (Pure HTTP) |
+| **BookingTestAdapter** | **데이터 Setup & 검증 (Helper)** | `.createSeat()`, `.verifyOutbox()` | `Repository`, `JPA` |
+
+- **Q: 왜 하나로 합치지 않는가?**
+    - A: 역할이 명확히 다르다.
+        - `HttpAdapter`는 사용자 관점(Black-box)이며, 내부 DB 구조를 몰라야 한다.
+        - `TestAdapter`는 테스트 관점(White-box)이며, 효율적인 테스트를 위해 백도어가 필요하다.
+
+### 3.2 테스트 안정성 확보
+
+- **RestAssured 설정:**
+    - Static 설정(`RestAssured.port = ...`)을 금지하고, **매 요청마다 Builder 패턴**으로 포트를 명시한다.
+    - 이유: 병렬 테스트 및 멀티 모듈 환경에서의 Thread-Safety 보장.
+
+- **Payment Mocking:**
+    - Happy Path 검증 시 안정성을 위해 Mock 성공률을 **100%**로 고정한다.
+    - (설정 파일 또는 코드 상수로 관리)

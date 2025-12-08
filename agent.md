@@ -6,6 +6,15 @@
 
 ---
 
+# 0. Development Environment (Workflow)
+
+프로젝트 작업을 시작하기 전에 아래 워크플로우를 실행하여 개발 환경(MySQL, Redis, Kafka)을 준비해라.
+
+- **Setup Command:** `/setup_env` (또는 `.agent/workflows/setup_env.md` 실행)
+- **Manual Command:** `docker-compose up -d`
+
+---
+
 # 2. Project Overview & Strategy
 
 이 프로젝트는 대규모 트래픽을 처리하는 **콘서트 티켓팅 서비스**입니다.
