@@ -18,8 +18,20 @@ public class TestQueueServiceClientConfig {
     @Primary
     public QueueServiceClient mockQueueServiceClient() {
         return (userId, queueToken) -> {
-            // 테스트에서는 항상 검증 통과
-            // Do nothing - always pass
+            // "INVALID" 토큰이 들어오면 예외 발생
+            if (queueToken != null && queueToken.contains("INVALID")) {
+                throw new personal.ai.common.exception.BusinessException(
+                        personal.ai.common.exception.ErrorCode.QUEUE_TOKEN_INVALID,
+                        "유효하지 않은 대기열 토큰입니다.");
+            }
+            // 만료된 토큰
+            if (queueToken != null && queueToken.contains("EXPIRED")) {
+                throw new personal.ai.common.exception.BusinessException(
+                        personal.ai.common.exception.ErrorCode.QUEUE_TOKEN_EXPIRED,
+                        "만료된 대기열 토큰입니다.");
+            }
+            // 그 외에는 성공 (유효한 토큰으로 간주)
+            // Do nothing - pass
         };
     }
 }
