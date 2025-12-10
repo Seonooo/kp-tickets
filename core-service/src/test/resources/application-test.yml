@@ -30,6 +30,8 @@ resilience4j:
         waitDurationInOpenState: 5000ms
         permittedNumberOfCallsInHalfOpenState: 10
         registerHealthIndicator: true
+        ignoreExceptions:
+          - personal.ai.common.exception.BusinessException
   bulkhead:
     instances:
       queueService:

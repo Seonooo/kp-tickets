@@ -2,15 +2,9 @@ package personal.ai.core.booking.adapter.out.external;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
-import io.github.resilience4j.bulkhead.Bulkhead;
-import io.github.resilience4j.bulkhead.BulkheadConfig;
-import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
-import io.github.resilience4j.retry.Retry;
-import io.github.resilience4j.retry.RetryConfig;
-import io.github.resilience4j.retry.RetryRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,7 +30,7 @@ import static org.awaitility.Awaitility.await;
  * 2. Circuit OPEN: 지속적인 에러 시 Circuit 열림
  * 3. Circuit HALF_OPEN: Wait Duration 후 Half-Open 전환
  * 4. Fallback: Circuit OPEN 시 즉시 실패
- * 5. Slow Call: 1초 이상 응답 시 실패로 간주
+ * 5. Slow Call: Read Timeout 발생하여 실패로 간주
  */
 @WireMockTest
 @DisplayName("Circuit Breaker 단위 테스트 (순수 WireMock)")
@@ -44,8 +38,6 @@ class CircuitBreakerUnitTest {
 
     private RestClient restClient;
     private CircuitBreaker circuitBreaker;
-    private Bulkhead bulkhead;
-    private Retry retry;
     private String baseUrl;
 
     @BeforeEach
@@ -76,22 +68,10 @@ class CircuitBreakerUnitTest {
                 .slowCallRateThreshold(50) // 50% Slow Call
                 .waitDurationInOpenState(Duration.ofSeconds(2)) // 테스트용 2초 (원래 5초)
                 .permittedNumberOfCallsInHalfOpenState(3) // 테스트용 3 (원래 10)
+                .ignoreExceptions(BusinessException.class) // 비즈니스 예외는 Circuit 실패로 카운트하지 않음
                 .build();
 
         circuitBreaker = CircuitBreakerRegistry.of(cbConfig).circuitBreaker("queueService");
-
-        // Bulkhead 설정
-        BulkheadConfig bhConfig = BulkheadConfig.custom()
-                .maxConcurrentCalls(100)
-                .maxWaitDuration(Duration.ZERO)
-                .build();
-        bulkhead = BulkheadRegistry.of(bhConfig).bulkhead("queueService");
-
-        // Retry 설정 (비활성화 - 단순 테스트)
-        RetryConfig retryConfig = RetryConfig.custom()
-                .maxAttempts(1)
-                .build();
-        retry = RetryRegistry.of(retryConfig).retry("queueService");
 
         // 각 테스트 전 상태 초기화
         circuitBreaker.reset();
@@ -146,20 +126,21 @@ class CircuitBreakerUnitTest {
     }
 
     @Test
-    @DisplayName("[OPEN] 지속적인 503 에러 시 Circuit이 열린다")
-    void circuitOpens_whenContinuous503Errors() {
-        // Given: Queue Service가 계속 503 반환
+    @DisplayName("[OPEN] 지속적인 Timeout 시 Circuit이 열린다")
+    void circuitOpens_whenContinuousTimeouts() {
+        // Given: Queue Service가 계속 Timeout 발생 (Read Timeout: 1000ms)
         stubFor(get(urlEqualTo("/api/v1/queue/validate"))
                 .willReturn(aResponse()
-                        .withStatus(503)
-                        .withBody("Service Unavailable")));
+                        .withStatus(200)
+                        .withFixedDelay(1500))); // 1.5초 지연 -> Read Timeout 발생
 
         // When: minimumNumberOfCalls(5) 이상 실패
+        // Timeout은 BusinessException이 아니므로 Circuit 실패로 카운트됨
         for (int i = 0; i < 6; i++) {
             try {
                 validateToken(1L, "test-token");
             } catch (Exception e) {
-                // 예외 예상
+                // 예외 예상 (Timeout)
             }
         }
 
@@ -240,19 +221,19 @@ class CircuitBreakerUnitTest {
     }
 
     @Test
-    @DisplayName("[Slow Call] 1초 이상 응답 시 Read Timeout으로 실패한다")
-    void slowCallFails_when1SecondDelay() {
-        // Given: Queue Service가 1.5초 지연 후 응답 (slowCallDurationThreshold: 1000ms)
+    @DisplayName("[Slow Call] Read Timeout 초과 시 Circuit 실패로 카운트된다")
+    void slowCallFails_whenReadTimeoutExceeds() {
+        // Given: Queue Service가 1.5초 지연 후 응답 (Read Timeout: 1000ms)
         stubFor(get(urlEqualTo("/api/v1/queue/validate"))
                 .willReturn(aResponse()
                         .withStatus(200)
-                        .withFixedDelay(1500))); // 1.5초 지연
+                        .withFixedDelay(1500))); // 1.5초 지연 → Read Timeout 발생
 
-        // When: Slow Call 발생 (Read Timeout 1초로 인해 실패)
+        // When: Read Timeout 발생 (1초 초과)
         assertThatThrownBy(() -> validateToken(1L, "slow-token"))
-                .isInstanceOf(Exception.class); // Read Timeout 발생
+                .isInstanceOf(Exception.class); // Read Timeout 예외
 
-        // Then: 실패 카운트 증가
+        // Then: Circuit Breaker가 실패로 카운트 (slowCallDurationThreshold 이전에 Timeout 발생)
         await().atMost(Duration.ofSeconds(2))
                 .untilAsserted(() -> {
                     assertThat(circuitBreaker.getMetrics().getNumberOfFailedCalls())
@@ -279,8 +260,39 @@ class CircuitBreakerUnitTest {
                     assertThat(be.getMessage()).contains("유효하지 않은 대기열 토큰입니다");
                 });
 
-        // Then: 4xx는 Circuit Breaker 관점에서 "성공"으로 카운트 (비즈니스 로직 에러)
-        // (참고: Resilience4j 기본 설정에서 예외를 던지면 실패로 카운트됨)
+        // Then: BusinessException은 ignoreExceptions 설정으로 Circuit Breaker 실패로 카운트되지 않음
+        // 4xx는 비즈니스 로직 에러이므로 Circuit을 열지 않음 (시스템 장애가 아님)
+    }
+
+    @Test
+    @DisplayName("[4xx Error] 4xx 에러는 Circuit 실패율에 카운트되지 않는다")
+    void fourxxErrors_shouldNotCountAsCircuitFailures() {
+        // Given: Queue Service가 계속 401 반환
+        stubFor(get(urlEqualTo("/api/v1/queue/validate"))
+                .willReturn(aResponse()
+                        .withStatus(401)
+                        .withBody("Unauthorized")));
+
+        // When: minimumNumberOfCalls(5) 이상 4xx 에러 발생
+        for (int i = 0; i < 10; i++) {
+            try {
+                validateToken(1L, "invalid-token");
+            } catch (BusinessException e) {
+                // BusinessException 예상됨 (ignoreExceptions)
+            }
+        }
+
+        // Then: Circuit은 CLOSED 상태 유지 (4xx는 실패로 카운트되지 않음)
+        assertThat(circuitBreaker.getState())
+                .isEqualTo(CircuitBreaker.State.CLOSED);
+
+        // Then: 실패 카운트가 0 (ignoreExceptions로 인해 무시됨)
+        assertThat(circuitBreaker.getMetrics().getNumberOfFailedCalls())
+                .isEqualTo(0);
+
+        // Then: 성공 카운트도 0 (ignoreExceptions는 성공도 실패도 아님)
+        assertThat(circuitBreaker.getMetrics().getNumberOfSuccessfulCalls())
+                .isEqualTo(0);
     }
 
     @Test
