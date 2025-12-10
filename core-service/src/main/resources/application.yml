@@ -61,7 +61,55 @@ spring:
 external:
   queue-service:
     base-url: ${QUEUE_SERVICE_URL:http://localhost:8081}
-    timeout-seconds: ${QUEUE_SERVICE_TIMEOUT:5}
+    connect-timeout-ms: ${QUEUE_SERVICE_CONNECT_TIMEOUT:200}  # TCP 연결 타임아웃 (빠른 실패)
+    read-timeout-ms: ${QUEUE_SERVICE_READ_TIMEOUT:1000}       # HTTP 응답 타임아웃 (Circuit Breaker Slow Call 기준)
+
+# Resilience4j 설정 (Circuit Breaker, Bulkhead, Retry)
+resilience4j:
+  circuitbreaker:
+    instances:
+      queueService:
+        # TIME_BASED 5초: 버스티한 트래픽 환경에서 False Positive 방지
+        slidingWindowType: TIME_BASED
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 100
+        failureRateThreshold: 50
+        # Slow Call: 1초 이상 느려지는 요청을 실패로 간주 (핵심!)
+        slowCallDurationThreshold: 1000ms
+        slowCallRateThreshold: 50
+        # Wait Duration: 사용자 재시도 간격(3~7초) 고려한 5초
+        waitDurationInOpenState: 5000ms
+        permittedNumberOfCallsInHalfOpenState: 10
+        # 상태 변경 이벤트 기록 활성화 (모니터링용)
+        registerHealthIndicator: true
+        recordExceptions:
+          - org.springframework.web.client.HttpServerErrorException
+          - org.springframework.web.client.ResourceAccessException
+        ignoreExceptions:
+          - personal.ai.common.exception.BusinessException
+
+  bulkhead:
+    instances:
+      queueService:
+        # Queue 호출은 최대 100개로 제한 (내부 자원 보호)
+        maxConcurrentCalls: 100
+        maxWaitDuration: 0ms  # 대기 없이 즉시 거부
+
+  retry:
+    instances:
+      queueService:
+        maxAttempts: 2  # 1회 재시도
+        waitDuration: 200ms
+        # 안전한 재시도만 (Connection 실패, 502 Bad Gateway)
+        retryExceptions:
+          - java.net.ConnectException
+          - java.net.SocketTimeoutException
+        # 위험한 재시도 금지 (Read Timeout, 503, 504, 4xx)
+        ignoreExceptions:
+          - org.springframework.web.client.HttpServerErrorException.ServiceUnavailable
+          - org.springframework.web.client.HttpServerErrorException.GatewayTimeout
+          - org.springframework.web.client.HttpClientErrorException
+          - personal.ai.common.exception.BusinessException
 
 server:
   port: ${SERVER_PORT:8080}
@@ -72,7 +120,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,circuitbreakers,circuitbreakerevents
       base-path: /actuator
   endpoint:
     health:
@@ -83,6 +131,8 @@ management:
     livenessState:
       enabled: true
     readinessState:
+      enabled: true
+    circuitbreakers:
       enabled: true
 
 logging:

@@ -29,4 +29,10 @@ dependencies {
 
     // RestAssured
     testImplementation 'io.rest-assured:rest-assured:5.4.0'
+
+    // Awaitility (Circuit Breaker 상태 변경 대기용)
+    testImplementation 'org.awaitility:awaitility:4.2.0'
+
+    // WireMock (HTTP Mock Server)
+    testImplementation 'org.wiremock:wiremock-standalone:3.3.1'
 }

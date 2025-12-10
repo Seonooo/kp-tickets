@@ -66,12 +66,12 @@
 - **Interface:** **`RestClient`** (Spring Framework 6.1+ / Boot 3.2+)
 - **Why:** `RestTemplate`은 유지보수 모드이며, `WebClient`는 Reactive 의존성(Netty)을 가져오므로, 가상 스레드 친화적인 `RestClient`를 표준으로 사용한다.
 
-### 3.3 Resilience & Fault Tolerance (Planned)
+### 3.3 Resilience & Fault Tolerance
 - **Library:** **Resilience4j** (Spring Boot 3 Starter)
-- **Target:** 외부 API 호출 (`PaymentMockService`, `RestClient`)
-- **Modules:** `Retry`, `CircuitBreaker`
-- **Annotation:** `@Retry`, `@CircuitBreaker` (AOP 기반 적용)
-- *Note: 현재 구현 단계에서는 미적용 상태임.*
+- **Target:** 외부 API 호출 (`QueueServiceRestClientAdapter`)
+- **Modules:** `CircuitBreaker`, `Bulkhead`, `Retry`
+- **Annotation:** `@CircuitBreaker`, `@Bulkhead`, `@Retry` (AOP 기반 적용)
+- **Status:** ✅ 구현 완료 (상세 설정은 `architecture.md` Section 5 참조)
 
 ---
 

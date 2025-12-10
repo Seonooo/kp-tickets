@@ -44,7 +44,8 @@ public enum ErrorCode {
 
     // External Service (6xxx)
     EXTERNAL_SERVICE_ERROR(HttpStatus.SERVICE_UNAVAILABLE, "E001", "외부 서비스 오류가 발생했습니다."),
-    EXTERNAL_SERVICE_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "E002", "외부 서비스 응답 시간 초과입니다.");
+    EXTERNAL_SERVICE_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "E002", "외부 서비스 응답 시간 초과입니다."),
+    QUEUE_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "E003", "대기열 서비스를 일시적으로 사용할 수 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

@@ -131,42 +131,54 @@
 
 ---
 
-## 5. Resilience & Fault Tolerance Strategy (Planned)
+## 5. Resilience & Fault Tolerance Strategy
 
-대규모 트래픽 상황에서 외부 시스템(PG사)의 지연이 전체 시스템의 마비로 전이되는 것을 막기 위해 **Fail-Fast** 전략을 채택한다.
-**데이터 정합성**을 최우선으로 하여 "Zombie Request(결과를 모르는 요청)"를 원천 차단한다.
+대규모 트래픽 상황에서 외부 시스템(Queue Service)의 지연이 전체 시스템의 마비로 전이되는 것을 막기 위해 **Fail-Fast** 전략을 채택한다.
+**Resilience4j**를 활용하여 Circuit Breaker, Bulkhead, Retry 패턴을 적용하였다.
 
-*Note: 본 섹션은 향후 고도화 단계에서 적용될 설계 전략이며, 현재 MVP 단계에는 미적용 상태이다.*
-
-### 5.1 Retry Strategy (재시도 정책)
-- **Target:** `PaymentMockService` (외부 결제 요청)
-- **Philosophy:** 연결 자체가 안 된 경우만 재시도하고, 응답이 늦는 경우는 중복 결제 위험이 있으므로 재시도하지 않는다.
-
-| 설정 항목 | 값 / 조건 | 비고 |
-|:---|:---|:---|
-| **Max Attempts** | **1회** (최초 1회 + 재시도 1회 = 총 2회) | 무한 재시도 방지 |
-| **Backoff** | **200ms (Fixed) + Jitter** | 속도전이므로 짧은 간격 + 분산 처리 |
-| **Retry On** | `ConnectTimeoutException`<br>`502 Bad Gateway` | 서버 도달 전 실패 (안전함) |
-| **No Retry** | `ReadTimeoutException`<br>`503`, `504`<br>`4xx Client Error` | 서버 도달 후 지연/실패 (중복 결제 위험) |
-
-### 5.2 Circuit Breaker Strategy (차단 정책)
-- **Target:** `PaymentMockService`
-- **Philosophy:** 스레드 고갈 방지를 위해 조금이라도 이상 징후(지연/에러)가 보이면 즉시 차단(Open)한다.
+### 5.1 Circuit Breaker Strategy (차단 정책)
+- **Target:** `QueueServiceRestClientAdapter` (Queue Service HTTP 호출)
+- **Philosophy:** 조금이라도 이상 징후(지연/에러)가 보이면 즉시 차단(Open)하여 스레드 고갈을 방지한다.
 
 | 설정 항목 | 값 | 근거 (Rationale) |
 |:---|:---|:---|
-| **Type** | `TIME_BASED` (Sliding Window) | 대규모 트래픽 특성상 시간 단위 통계가 유효함 |
-| **Window Size** | **10초** | 최근 10초간의 트래픽을 표본으로 삼음 |
+| **Type** | `TIME_BASED` (Sliding Window) | 버스티한 트래픽 환경에서 Count-based 대비 오탐지(False Positive) 방지 |
+| **Window Size** | **5초** | 최근 5초간의 트래픽을 표본으로 삼음 |
 | **Min Calls** | **100회** | 최소 100건 이상의 요청이 있을 때만 판단 (통계적 유의미성) |
-| **Failure Rate** | **50%** | 에러(500 등)가 절반 이상이면 차단 |
-| **Slow Call** | **1000ms (1s)** | ReadTimeout(3s)까지 기다리면 늦음. 1초 넘으면 느린 것으로 간주 |
+| **Failure Rate** | **50%** | 에러(5xx)가 절반 이상이면 차단 |
+| **Slow Call** | **1000ms (1s)** | 1초 넘으면 느린 것으로 간주 (핵심!) |
 | **Slow Rate** | **50%** | 1초 이상 지연이 절반을 넘으면 차단 |
-| **Wait Duration** | **10초** | Circuit Open 시 10초간 대기 후 Half-Open 전환 |
+| **Wait Duration** | **5초** | 사용자 재시도 간격(3~7초) 고려한 현실적 타협점 |
 | **Half-Open** | **10회 허용** | 복구 여부 판단을 위해 10개의 요청을 흘려봄 |
+| **Record Exceptions** | `HttpServerErrorException`, `ResourceAccessException` | 5xx, 네트워크 에러만 실패 카운트 |
+| **Ignore Exceptions** | `BusinessException` | 4xx(비즈니스 에러)는 Circuit 실패로 카운트하지 않음 |
 
-### 5.3 Implementation Guide
-- **Fallback:**
-    - Circuit Breaker가 열리거나(Open) 재시도가 모두 실패한 경우, 즉시 **`PaymentFailedException`** (또는 503)을 반환하여 유저에게 "잠시 후 다시 시도해주세요"를 안내한다.
-    - 억지로 성공 처리하거나 큐에 넣지 않는다. (Clean Failure)
-  
+### 5.2 Bulkhead Strategy (격리 정책)
+- **Target:** `QueueServiceRestClientAdapter`
+- **Philosophy:** 외부 호출이 내부 자원(Thread Pool, DB Connection)을 잠식하지 않도록 동시 호출 수를 제한한다.
+
+| 설정 항목 | 값 | 근거 (Rationale) |
+|:---|:---|:---|
+| **Max Concurrent Calls** | **100** | Queue Service 호출은 최대 100개로 제한 |
+| **Max Wait Duration** | **0ms** | 대기 없이 즉시 거부 (Fail-Fast) |
+
+### 5.3 Retry Strategy (재시도 정책)
+- **Target:** `QueueServiceRestClientAdapter`
+- **Philosophy:** 연결 자체가 안 된 경우만 재시도하고, 응답이 늦는 경우는 중복 처리 위험이 있으므로 재시도하지 않는다.
+
+| 설정 항목 | 값 / 조건 | 비고 |
+|:---|:---|:---|
+| **Max Attempts** | **2회** (최초 1회 + 재시도 1회) | 무한 재시도 방지 |
+| **Backoff** | **200ms (Fixed)** | 속도전이므로 짧은 간격 |
+| **Retry On** | `ConnectException`<br>`SocketTimeoutException` | 서버 도달 전 실패 (안전함) |
+| **No Retry** | `ServiceUnavailable (503)`<br>`GatewayTimeout (504)`<br>`HttpClientErrorException (4xx)`<br>`BusinessException` | 서버 도달 후 지연/실패 (중복 위험) |
+
+### 5.4 Fallback Strategy (실패 처리)
+- **Circuit Breaker Open 시:**
+  - 즉시 `QUEUE_SERVICE_UNAVAILABLE` (503) 반환
+  - 메시지: "대기열 확인 지연 중입니다. 5초 후 다시 시도해주세요."
+- **SLO Decision:**
+  - **Fairness(공정성) > Availability(가용성)**: "Fail-open(무조건 통과)"은 수천 명의 새치기를 허용하므로 거부.
+  - 503 반환은 **"공정성을 지키기 위한 정책적 결정"**임.
+
 ---

@@ -19,6 +19,11 @@ dependencies {
     // Kafka (HealthCheckService용) - 의존하는 모듈에 전파
     api 'org.springframework.kafka:spring-kafka'
 
+    // Resilience4j (Circuit Breaker, Bulkhead, Retry) - 의존하는 모듈에 전파
+    api "io.github.resilience4j:resilience4j-spring-boot3:${resilience4jVersion}"
+    api "io.github.resilience4j:resilience4j-micrometer:${resilience4jVersion}"
+    api 'org.springframework.boot:spring-boot-starter-aop'
+
     // Test 인터페이스용 (컴파일 시에만 필요, 런타임은 각 서비스가 제공)
     compileOnly 'io.rest-assured:rest-assured:5.4.0'
 }
