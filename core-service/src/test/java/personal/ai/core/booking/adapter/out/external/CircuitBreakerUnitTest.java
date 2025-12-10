@@ -79,6 +79,9 @@ class CircuitBreakerUnitTest {
 
     /**
      * Queue 토큰 검증 호출 (Circuit Breaker로 감싸진)
+     * 프로덕션 QueueServiceRestClientAdapter와 동일한 동작
+     * - 4xx: BusinessException (ignoreExceptions)
+     * - 5xx: 기본 예외 전파 (Circuit 실패로 카운트)
      */
     private void validateToken(Long userId, String queueToken) {
         Supplier<Void> decoratedSupplier = CircuitBreaker.decorateSupplier(circuitBreaker, () -> {
@@ -90,9 +93,7 @@ class CircuitBreakerUnitTest {
                     .onStatus(status -> status.is4xxClientError(), (request, response) -> {
                         throw new BusinessException(ErrorCode.QUEUE_TOKEN_INVALID, "유효하지 않은 대기열 토큰입니다.");
                     })
-                    .onStatus(status -> status.is5xxServerError(), (request, response) -> {
-                        throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR, "대기열 서비스 오류가 발생했습니다.");
-                    })
+                    // 5xx 핸들러 제거 - 프로덕션과 동일하게 기본 예외 전파
                     .toBodilessEntity();
             return null;
         });
