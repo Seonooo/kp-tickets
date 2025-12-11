@@ -124,7 +124,30 @@ personal.ai.booking
 - **Write:** 데이터를 변경하는 메서드에만 `@Transactional`을 명시한다.
 - **Scope:** 트랜잭션 범위 내에서 외부 API 호출(Network I/O)을 금지한다. (Safe Transaction Pattern 준수)
 
+### 4.4 Transactional Propagation (Outbox Pattern)
+
+Outbox 이벤트 저장은 반드시 비즈니스 로직과 **같은 트랜잭션**에서 수행되어야 한다.
+
+```java
+// Outbox Adapter에 MANDATORY 적용
+@Transactional(propagation = Propagation.MANDATORY)
+public void publishEvent(...) { }
+```
+
+- **MANDATORY:** 호출자가 트랜잭션을 시작하지 않으면 즉시 예외 발생 (Fail-Fast)
+- **효과:** 데이터 정합성 보장을 아키텍처 레벨에서 강제
+
+### 4.5 Service Separation (SRP + DIP)
+
+- **SRP (Single Responsibility):** UseCase 당 하나의 Application Service 클래스
+  - ❌ `BookingService` (여러 UseCase 혼재)
+  - ✅ `SeatReservationService`, `ReservationQueryService` (UseCase별 분리)
+- **DIP (Dependency Inversion):** private 메서드 → Port 인터페이스로 분리
+  - 테스트 시 Mock 주입 가능
+  - 확장 포인트 명확화 (OCP)
+
 ---
+
 
 ## 5. Exception Handling & Logging
 
@@ -157,7 +180,48 @@ public record ApiResponse<T>(
 - **INFO:** 주요 비즈니스 흐름 성공, 상태 변경
 - **DEBUG:** 개발 단계의 상세 로그 (운영 환경에서는 비활성화)
 
+### 5.4 Logging Policy (PII & Context)
+
+로그에 포함할 식별자와 레벨별 정책:
+
+| 레벨 | 성공/실패 | 포함 정보 | PII 정책 |
+|------|----------|----------|----------|
+| DEBUG | 성공 | `userId`, `concertId`, `seatId` | 허용 |
+| WARN | 실패 | `concertId`, `seatId` | `userId` 제외 |
+| ERROR | 실패 | `concertId`, 에러 메시지 | `userId` 제외, Stack Trace 포함 |
+
+```java
+// ✅ Good
+log.debug("Reservation created: reservationId={}, seatId={}", reservationId, seatId);
+log.warn("Reservation expired: reservationId={}", reservationId);
+
+// ❌ Bad (실패 로그에 userId 포함)
+log.warn("Reservation failed: userId={}, reservationId={}", userId, reservationId);
+```
+
 ---
+
+## 5.5 var Pattern (Selective Usage)
+
+Java 21의 `var`는 **가독성을 해치지 않는 범위**에서 선택적으로 사용한다.
+
+**사용 권장:**
+```java
+var reservation = reservationRepository.findById(id);
+var user = userRepository.findById(userId);
+var result = transactionTemplate.execute(status -> ...);
+```
+
+**사용 지양 (타입 명시 필요):**
+```java
+int count = 0;              // 기본 타입
+Instant now = Instant.now(); // 시간 타입 명확성
+Duration timeout = Duration.ofSeconds(30);
+BigDecimal price = new BigDecimal("10000");
+```
+
+---
+
 
 ## 6. Testing Strategy
 
