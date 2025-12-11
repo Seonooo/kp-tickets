@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
+import personal.ai.queue.domain.exception.QueueDataCorruptionException;
 import personal.ai.queue.domain.model.QueueStatus;
 import personal.ai.queue.domain.model.QueueToken;
 
@@ -73,11 +74,11 @@ public class RedisActiveQueueAdapter {
             var token = tokenConverter.toQueueToken(redisHashData, concertId, userId);
             return Optional.of(token);
         } catch (Exception e) {
-            log.error("Failed to retrieve active token");
-            if (log.isDebugEnabled()) {
-                log.debug("Token retrieval failed: concertId={}, userId={}", concertId, userId, e);
-            }
-            return Optional.empty();
+            // 데이터 손상: Redis에 데이터가 존재하지만 형식이 잘못됨
+            log.error("Queue data corruption detected - Token data exists but format is invalid: " +
+                "concertId={}, userId={}, data={}",
+                concertId, userId, redisHashData, e);
+            throw new QueueDataCorruptionException(e);
         }
     }
 
@@ -221,11 +222,12 @@ public class RedisActiveQueueAdapter {
             log.debug("Moved users atomically: concertId={}, count={}", concertId, movedUserIds.size());
             return movedUserIds;
         } catch (Exception e) {
-            log.error("Lua script result parsing failed (System Error)");
-            if (log.isDebugEnabled()) {
-                log.debug("JSON parse error: result={}", jsonResult, e);
-            }
-            return List.of();
+            // CRITICAL: Lua 스크립트는 성공했지만 결과 파싱 실패
+            // 실제로 사용자들이 이동되었을 수 있으므로 데이터 불일치 상태
+            log.error("CRITICAL: Queue data corruption - Lua script succeeded but result parsing failed. " +
+                "Users may have been moved but cannot be tracked: concertId={}, jsonResult={}",
+                concertId, jsonResult, e);
+            throw new QueueDataCorruptionException(e);
         }
     }
 
