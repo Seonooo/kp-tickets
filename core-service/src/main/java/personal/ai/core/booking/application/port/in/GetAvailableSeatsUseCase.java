@@ -17,7 +17,6 @@ public interface GetAvailableSeatsUseCase {
      * @param userId 사용자 ID
      * @param queueToken 대기열 토큰
      * @return 예매 가능한 좌석 목록 (AVAILABLE 상태)
-     * @throws personal.ai.core.booking.domain.exception.ScheduleNotFoundException 일정을 찾을 수 없을 때
      */
     List<Seat> getAvailableSeats(Long scheduleId, Long userId, String queueToken);
 }
