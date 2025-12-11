@@ -43,7 +43,7 @@ public class RedisActiveQueueAdapter {
         var tokenKey = RedisKeyGenerator.activeTokenKey(concertId, userId);
         var ttlSeconds = tokenConverter.calculateRemainingTtlSeconds(expiredAt);
 
-        luaScriptExecutor.executeAddToActiveQueue(
+        boolean success = luaScriptExecutor.executeAddToActiveQueue(
                 activeQueueKey,
                 tokenKey,
                 userId,
@@ -51,6 +51,10 @@ public class RedisActiveQueueAdapter {
                 expiredAt,
                 ttlSeconds
         );
+
+        if (!success) {
+            log.warn("Failed to add to active queue: concertId={}, userId={}", concertId, userId);
+        }
 
         log.debug("Added to active queue: concertId={}, userId={}, token={}", concertId, userId, token);
     }

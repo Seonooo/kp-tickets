@@ -40,8 +40,9 @@ public class RedisLuaScriptExecutor {
      * @param token 토큰 값
      * @param expiredAt 만료 시각
      * @param ttlSeconds TTL (초)
+     * @return 성공 여부 (1: 성공, 0: 실패)
      */
-    public void executeAddToActiveQueue(
+    public boolean executeAddToActiveQueue(
             String activeQueueKey,
             String tokenKey,
             String userId,
@@ -53,13 +54,20 @@ public class RedisLuaScriptExecutor {
         String status = QueueStatus.READY.name();
         String expiredAtStr = String.valueOf(expiredAt.getEpochSecond());
 
-        redisTemplate.execute(
+        Long result = redisTemplate.execute(
                 addToActiveQueueScript,
                 List.of(activeQueueKey, tokenKey),
                 userId, score, token, status, INITIAL_EXTEND_COUNT, expiredAtStr, String.valueOf(ttlSeconds)
         );
 
-        log.debug("Executed addToActiveQueue script: userId={}, token={}", userId, token);
+        boolean success = result != null && result == 1L;
+        if (success) {
+            log.debug("Executed addToActiveQueue script: userId={}, token={}", userId, token);
+        } else {
+            log.warn("Failed to add to active queue: userId={}, result={}", userId, result);
+        }
+
+        return success;
     }
 
     /**
