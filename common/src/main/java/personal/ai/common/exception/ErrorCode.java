@@ -34,6 +34,7 @@ public enum ErrorCode {
     PAYMENT_FAILED(HttpStatus.BAD_REQUEST, "P001", "결제에 실패했습니다."),
     INSUFFICIENT_BALANCE(HttpStatus.BAD_REQUEST, "P002", "잔액이 부족합니다."),
     PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "P003", "결제 정보를 찾을 수 없습니다."),
+    PAYMENT_IN_PROGRESS(HttpStatus.CONFLICT, "P004", "이미 진행 중인 결제가 있습니다."),
 
     // Queue Domain (5xxx)
     QUEUE_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "Q001", "대기열 토큰을 찾을 수 없습니다."),

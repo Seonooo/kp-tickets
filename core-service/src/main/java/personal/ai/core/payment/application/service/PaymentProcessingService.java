@@ -11,6 +11,7 @@ import personal.ai.core.payment.application.port.out.PaymentRepository;
 import personal.ai.core.payment.application.port.out.PaymentResultHandlerPort;
 import personal.ai.core.payment.application.port.out.ReservationValidationPort;
 import personal.ai.core.payment.domain.exception.PaymentAlreadyCompletedException;
+import personal.ai.core.payment.domain.exception.PaymentAlreadyInProgressException;
 import personal.ai.core.payment.domain.exception.PaymentFailedException;
 import personal.ai.core.payment.domain.model.Payment;
 import personal.ai.core.payment.domain.service.PaymentMockService;
@@ -73,9 +74,21 @@ public class PaymentProcessingService implements ProcessPaymentUseCase {
     private Payment createPendingPayment(ProcessPaymentCommand command) {
         paymentRepository.findByReservationId(command.reservationId())
                 .ifPresent(existing -> {
+                    // 1. 이미 완료된 결제: 중복 결제 방지
                     if (existing.isCompleted()) {
                         throw new PaymentAlreadyCompletedException(existing.id());
                     }
+
+                    // 2. 진행 중인 결제: 동시 결제 방지
+                    if (existing.isPending()) {
+                        log.warn("Payment already in progress: paymentId={}, reservationId={}",
+                            existing.id(), command.reservationId());
+                        throw new PaymentAlreadyInProgressException(existing.id());
+                    }
+
+                    // 3. FAILED, CANCELLED: 재시도 허용 (로그만 남김)
+                    log.info("Retrying payment for reservation: reservationId={}, previousStatus={}, previousPaymentId={}",
+                        command.reservationId(), existing.status(), existing.id());
                 });
 
         var payment = Payment.create(
