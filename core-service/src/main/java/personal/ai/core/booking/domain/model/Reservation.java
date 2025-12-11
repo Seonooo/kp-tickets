@@ -2,6 +2,8 @@ package personal.ai.core.booking.domain.model;
 
 import personal.ai.common.exception.BusinessException;
 import personal.ai.common.exception.ErrorCode;
+import personal.ai.core.booking.domain.exception.InvalidReservationStateException;
+import personal.ai.core.booking.domain.exception.ReservationAccessDeniedException;
 
 import java.time.LocalDateTime;
 
@@ -16,8 +18,7 @@ public record Reservation(
         Long scheduleId,
         ReservationStatus status,
         LocalDateTime expiresAt,
-        LocalDateTime createdAt
-) {
+        LocalDateTime createdAt) {
     public Reservation {
         if (userId == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "User ID cannot be null");
@@ -42,10 +43,10 @@ public record Reservation(
     /**
      * 예약 생성 (정적 팩토리 메서드)
      *
-     * @param userId      사용자 ID
-     * @param seatId      좌석 ID
-     * @param scheduleId  일정 ID
-     * @param ttlMinutes  만료 시간 (분)
+     * @param userId     사용자 ID
+     * @param seatId     좌석 ID
+     * @param scheduleId 일정 ID
+     * @param ttlMinutes 만료 시간 (분)
      * @return 새로운 예약 (PENDING 상태)
      */
     public static Reservation create(Long userId, Long seatId, Long scheduleId, int ttlMinutes) {
@@ -56,8 +57,7 @@ public record Reservation(
                 scheduleId,
                 ReservationStatus.PENDING,
                 LocalDateTime.now().plusMinutes(ttlMinutes),
-                LocalDateTime.now()
-        );
+                LocalDateTime.now());
     }
 
     /**
@@ -67,8 +67,7 @@ public record Reservation(
     public Reservation confirm() {
         if (status != ReservationStatus.PENDING) {
             throw new IllegalStateException(
-                    String.format("Cannot confirm reservation in %s status. Reservation ID: %d", status, id)
-            );
+                    String.format("Cannot confirm reservation in %s status. Reservation ID: %d", status, id));
         }
         return new Reservation(id, userId, seatId, scheduleId,
                 ReservationStatus.CONFIRMED, expiresAt, createdAt);
@@ -81,8 +80,7 @@ public record Reservation(
     public Reservation cancel() {
         if (status != ReservationStatus.PENDING) {
             throw new IllegalStateException(
-                    String.format("Cannot cancel reservation in %s status. Reservation ID: %d", status, id)
-            );
+                    String.format("Cannot cancel reservation in %s status. Reservation ID: %d", status, id));
         }
         return new Reservation(id, userId, seatId, scheduleId,
                 ReservationStatus.CANCELLED, expiresAt, createdAt);
@@ -95,8 +93,7 @@ public record Reservation(
     public Reservation expire() {
         if (status != ReservationStatus.PENDING) {
             throw new IllegalStateException(
-                    String.format("Cannot expire reservation in %s status. Reservation ID: %d", status, id)
-            );
+                    String.format("Cannot expire reservation in %s status. Reservation ID: %d", status, id));
         }
         return new Reservation(id, userId, seatId, scheduleId,
                 ReservationStatus.EXPIRED, expiresAt, createdAt);
@@ -129,5 +126,31 @@ public record Reservation(
      */
     public boolean isCancellable() {
         return isPending() && !isExpired();
+    }
+
+    // ========== Domain Validation Methods (Tell, Don't Ask) ==========
+
+    /**
+     * 소유권 검증
+     * 요청한 사용자가 예약의 소유자인지 확인
+     *
+     * @param requestUserId 요청 사용자 ID
+     * @throws ReservationAccessDeniedException 소유권 불일치 시
+     */
+    public void ensureOwnership(Long requestUserId) {
+        if (!this.userId.equals(requestUserId)) {
+            throw new ReservationAccessDeniedException();
+        }
+    }
+
+    /**
+     * PENDING 상태 검증
+     *
+     * @throws InvalidReservationStateException PENDING 상태가 아닐 때
+     */
+    public void ensurePending() {
+        if (!isPending()) {
+            throw new InvalidReservationStateException(status);
+        }
     }
 }

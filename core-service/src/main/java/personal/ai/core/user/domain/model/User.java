@@ -1,5 +1,8 @@
 package personal.ai.core.user.domain.model;
 
+import personal.ai.common.exception.BusinessException;
+import personal.ai.common.exception.ErrorCode;
+
 /**
  * User Domain Model
  * 사용자 도메인의 불변 모델
@@ -11,13 +14,13 @@ public record User(
 ) {
     public User {
         if (id == null) {
-            throw new IllegalArgumentException("User ID cannot be null");
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "User ID cannot be null");
         }
         if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("User name cannot be null or blank");
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "User name cannot be null or blank");
         }
         if (email == null || email.isBlank()) {
-            throw new IllegalArgumentException("User email cannot be null or blank");
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "User email cannot be null or blank");
         }
     }
 

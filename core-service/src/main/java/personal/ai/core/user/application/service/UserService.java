@@ -24,32 +24,35 @@ public class UserService implements ValidateUserUseCase, GetUserUseCase {
 
     @Override
     public User validateUser(Long userId) {
-        log.debug("Validating user: userId={}", userId);
-
         return userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
+                .orElseThrow(() -> {
+                    log.warn("User not found for validation: userId={}", userId);
+                    return new UserNotFoundException(userId);
+                });
     }
 
     @Override
     public boolean exists(Long userId) {
-        log.debug("Checking user existence: userId={}", userId);
-
-        return userRepository.existsById(userId);
+        var exists = userRepository.existsById(userId);
+        log.debug("User existence check: userId={}, exists={}", userId, exists);
+        return exists;
     }
 
     @Override
     public User getUser(Long userId) {
-        log.debug("Getting user: userId={}", userId);
-
         return userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
+                .orElseThrow(() -> {
+                    log.warn("User not found: userId={}", userId);
+                    return new UserNotFoundException(userId);
+                });
     }
 
     @Override
     public User getUserByEmail(String email) {
-        log.debug("Getting user by email: email={}", email);
-
         return userRepository.findByEmail(email)
-                .orElseThrow(() -> new UserNotFoundException(email));
+                .orElseThrow(() -> {
+                    log.warn("User not found by email");
+                    return new UserNotFoundException(email);
+                });
     }
 }
