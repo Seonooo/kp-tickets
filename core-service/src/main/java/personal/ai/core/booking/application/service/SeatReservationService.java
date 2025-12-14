@@ -13,6 +13,7 @@ import personal.ai.core.booking.domain.exception.ConcurrentReservationException;
 import personal.ai.core.booking.domain.exception.SeatAlreadyReservedException;
 import personal.ai.core.booking.domain.model.Reservation;
 import personal.ai.core.booking.domain.service.BookingManager;
+import personal.ai.core.booking.domain.service.QueueTokenExtractor;
 
 /**
  * Seat Reservation Service (SRP)
@@ -32,7 +33,9 @@ public class SeatReservationService implements ReserveSeatUseCase {
 
     @Override
     public Reservation reserveSeat(ReserveSeatCommand command) {
-        queueServiceClient.validateToken(command.userId(), command.queueToken());
+        // 토큰에서 concertId 추출 후 검증
+        String concertId = QueueTokenExtractor.extractConcertId(command.queueToken());
+        queueServiceClient.validateToken(concertId, command.userId(), command.queueToken());
 
         boolean locked = seatLockRepository.tryLock(command.seatId(), command.userId(), SEAT_LOCK_TTL_SECONDS);
         if (!locked) {

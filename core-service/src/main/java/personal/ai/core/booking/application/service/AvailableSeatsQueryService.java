@@ -8,6 +8,7 @@ import personal.ai.core.booking.application.port.in.GetAvailableSeatsUseCase;
 import personal.ai.core.booking.application.port.out.QueueServiceClient;
 import personal.ai.core.booking.application.port.out.SeatRepository;
 import personal.ai.core.booking.domain.model.Seat;
+import personal.ai.core.booking.domain.service.QueueTokenExtractor;
 
 import java.util.List;
 
@@ -26,7 +27,13 @@ public class AvailableSeatsQueryService implements GetAvailableSeatsUseCase {
 
     @Override
     public List<Seat> getAvailableSeats(Long scheduleId, Long userId, String queueToken) {
-        queueServiceClient.validateToken(userId, queueToken);
+        log.debug("Getting available seats: scheduleId={}, userId={}", scheduleId, userId);
+
+        // 토큰에서 concertId 추출 (형식: concertId:userId:counter)
+        String concertId = QueueTokenExtractor.extractConcertId(queueToken);
+
+        // Queue Service에 토큰 검증 요청
+        queueServiceClient.validateToken(concertId, userId, queueToken);
 
         var availableSeats = seatRepository.findAvailableByScheduleId(scheduleId);
 

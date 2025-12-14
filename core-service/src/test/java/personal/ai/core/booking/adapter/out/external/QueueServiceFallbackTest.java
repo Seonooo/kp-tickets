@@ -67,9 +67,9 @@ class QueueServiceFallbackTest {
         adapter = new QueueServiceRestClientAdapter(restClient);
     }
 
-    private void validateTokenWithCircuitBreaker(Long userId, String queueToken) {
+    private void validateTokenWithCircuitBreaker(String concertId, Long userId, String queueToken) {
         circuitBreaker.executeSupplier(() -> {
-            adapter.validateToken(userId, queueToken);
+            adapter.validateToken(concertId, userId, queueToken);
             return null;
         });
     }
@@ -88,7 +88,7 @@ class QueueServiceFallbackTest {
         // When & Then: Circuit OPEN 시 즉시 CallNotPermittedException 발생
         // Note: Adapter의 @CircuitBreaker fallback은 Spring AOP 환경에서만 동작하므로
         // 여기서는 Circuit OPEN으로 인한 즉시 실패를 검증
-        assertThatThrownBy(() -> validateTokenWithCircuitBreaker(1L, "test-token"))
+        assertThatThrownBy(() -> validateTokenWithCircuitBreaker("concert-1", 1L, "test-token"))
                 .isInstanceOf(io.github.resilience4j.circuitbreaker.CallNotPermittedException.class);
 
         // Then: WireMock에 요청이 가지 않음 (Circuit이 요청을 차단)

@@ -34,6 +34,7 @@ public class BookingAcceptanceSteps {
     private final AtomicInteger successfulReservations = new AtomicInteger(0);
     private final AtomicInteger failedReservations = new AtomicInteger(0);
     // 테스트 컨텍스트
+    private static final String DEFAULT_CONCERT_ID = "CONCERT-001";
     private Long currentScheduleId;
     private Long currentSeatId;
     private Long currentUserId;
@@ -56,7 +57,7 @@ public class BookingAcceptanceSteps {
 
         // 기본 사용자 생성 및 토큰 발급
         this.currentUserId = bookingAdapter.createUser("testuser");
-        this.currentQueueToken = bookingAdapter.issueActiveQueueToken(currentUserId);
+        this.currentQueueToken = bookingAdapter.issueActiveQueueToken(DEFAULT_CONCERT_ID, currentUserId);
     }
 
     // ==========================================
@@ -98,8 +99,7 @@ public class BookingAcceptanceSteps {
 
         // 만료된 예약 생성
         this.currentReservationId = bookingAdapter.createReservation(
-            null, currentUserId, currentSeatId, ReservationStatus.EXPIRED
-        );
+                null, currentUserId, currentSeatId, ReservationStatus.EXPIRED);
     }
 
     // ==========================================
@@ -111,10 +111,9 @@ public class BookingAcceptanceSteps {
         log.info(">>> When: 좌석 목록 조회 API 호출");
         try {
             lastSeatsResponse = bookingAdapter.getAvailableSeats(
-                currentScheduleId,
-                currentUserId,
-                currentQueueToken
-            );
+                    currentScheduleId,
+                    currentUserId,
+                    currentQueueToken);
         } catch (Exception e) {
             log.error(">>> 좌석 조회 실패", e);
             throw e;
@@ -126,11 +125,10 @@ public class BookingAcceptanceSteps {
         log.info(">>> When: 좌석 예약 API 호출");
         try {
             lastReservationResponse = bookingAdapter.reserveSeat(
-                currentScheduleId,
-                currentSeatId,
-                currentUserId,
-                currentQueueToken
-            );
+                    currentScheduleId,
+                    currentSeatId,
+                    currentUserId,
+                    currentQueueToken);
             currentReservationId = lastReservationResponse.reservationId();
         } catch (Exception e) {
             log.debug(">>> 예약 실패 (예상된 동작일 수 있음): {}", e.getMessage());
@@ -151,14 +149,13 @@ public class BookingAcceptanceSteps {
             futures[i] = CompletableFuture.runAsync(() -> {
                 try {
                     Long userId = bookingAdapter.createUser(username);
-                    String token = bookingAdapter.issueActiveQueueToken(userId);
+                    String token = bookingAdapter.issueActiveQueueToken(DEFAULT_CONCERT_ID, userId);
 
                     bookingAdapter.reserveSeat(
-                        currentScheduleId,
-                        currentSeatId,
-                        userId,
-                        token
-                    );
+                            currentScheduleId,
+                            currentSeatId,
+                            userId,
+                            token);
                     successfulReservations.incrementAndGet();
                     log.debug(">>> 예약 성공 - username={}", username);
                 } catch (Exception e) {
@@ -170,7 +167,7 @@ public class BookingAcceptanceSteps {
 
         CompletableFuture.allOf(futures).join();
         log.info(">>> When: 동시 예약 완료 - 성공: {}, 실패: {}",
-            successfulReservations.get(), failedReservations.get());
+                successfulReservations.get(), failedReservations.get());
     }
 
     @When("나의 예약 조회를 요청한다")
@@ -189,9 +186,8 @@ public class BookingAcceptanceSteps {
         log.info(">>> When: 결제 API 호출");
         try {
             lastPaymentResponse = bookingAdapter.processPayment(
-                currentReservationId,
-                currentUserId
-            );
+                    currentReservationId,
+                    currentUserId);
         } catch (Exception e) {
             log.debug(">>> 결제 실패 (예상된 동작일 수 있음): {}", e.getMessage());
             // 실패 케이스는 Then에서 검증
@@ -250,14 +246,14 @@ public class BookingAcceptanceSteps {
     @Then("오직 {int}명의 사용자만 예약에 성공하고")
     public void 오직_명의_사용자만_예약에_성공하고(Integer expectedSuccess) {
         log.info(">>> Then: 예약 성공 수 검증 - expected={}, actual={}",
-            expectedSuccess, successfulReservations.get());
+                expectedSuccess, successfulReservations.get());
         assertThat(successfulReservations.get()).isEqualTo(expectedSuccess);
     }
 
     @And("{int}명의 사용자는 예약에 실패한다")
     public void 명의_사용자는_예약에_실패한다(Integer expectedFail) {
         log.info(">>> Then: 예약 실패 수 검증 - expected={}, actual={}",
-            expectedFail, failedReservations.get());
+                expectedFail, failedReservations.get());
         assertThat(failedReservations.get()).isEqualTo(expectedFail);
     }
 
