@@ -6,11 +6,6 @@ on:
   pull_request:
     branches: [ main, develop ]
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
-
 # 동시 실행 제어: 같은 브랜치의 이전 워크플로우가 실행 중이면 취소
 concurrency:
   group: ci-${{ github.ref }}
@@ -23,6 +18,7 @@ jobs:
     permissions:
       checks: write      # Check Run API에 접근할 수 있는 권한
       contents: read
+      pull-requests: write
 
     steps:
       # 저장소의 코드 Runner 환경에 내려 받음
