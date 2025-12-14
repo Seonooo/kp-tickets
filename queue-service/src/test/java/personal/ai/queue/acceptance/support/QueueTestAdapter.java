@@ -95,7 +95,8 @@ public class QueueTestAdapter {
      * 만료된 토큰 추가 (테스트용)
      */
     public void addExpiredToken(String concertId, String userId, Instant expiredAt) {
-        String token = domainService.generateToken();
+        // 프로덕션 Lua 스크립트와 동일한 형식으로 토큰 생성: {concertId}:{userId}:{counter}
+        String token = concertId + ":" + userId + ":" + System.currentTimeMillis();
         queueRepository.addToActiveQueue(concertId, userId, token, expiredAt);
     }
 
@@ -110,8 +111,7 @@ public class QueueTestAdapter {
                     userId,
                     "BOOKING-" + UUID.randomUUID(),
                     10000L,
-                    Instant.now()
-            );
+                    Instant.now());
 
             String message = objectMapper.writeValueAsString(event);
             kafkaTemplate.send("booking.payment.completed", message);

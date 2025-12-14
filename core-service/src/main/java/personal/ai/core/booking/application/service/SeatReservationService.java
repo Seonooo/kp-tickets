@@ -10,10 +10,10 @@ import personal.ai.core.booking.application.port.out.QueueServiceClient;
 import personal.ai.core.booking.application.port.out.ReservationCacheRepository;
 import personal.ai.core.booking.application.port.out.SeatLockRepository;
 import personal.ai.core.booking.domain.exception.ConcurrentReservationException;
-import personal.ai.core.booking.domain.exception.QueueTokenInvalidException;
 import personal.ai.core.booking.domain.exception.SeatAlreadyReservedException;
 import personal.ai.core.booking.domain.model.Reservation;
 import personal.ai.core.booking.domain.service.BookingManager;
+import personal.ai.core.booking.domain.service.QueueTokenExtractor;
 
 /**
  * Seat Reservation Service (SRP)
@@ -34,7 +34,7 @@ public class SeatReservationService implements ReserveSeatUseCase {
     @Override
     public Reservation reserveSeat(ReserveSeatCommand command) {
         // 토큰에서 concertId 추출 후 검증
-        String concertId = extractConcertIdFromToken(command.queueToken());
+        String concertId = QueueTokenExtractor.extractConcertId(command.queueToken());
         queueServiceClient.validateToken(concertId, command.userId(), command.queueToken());
 
         boolean locked = seatLockRepository.tryLock(command.seatId(), command.userId(), SEAT_LOCK_TTL_SECONDS);
@@ -57,23 +57,5 @@ public class SeatReservationService implements ReserveSeatUseCase {
         } finally {
             seatLockRepository.unlock(command.seatId(), command.userId());
         }
-    }
-
-    /**
-     * 토큰에서 concertId 추출
-     * 토큰 형식: {concertId}:{userId}:{timestamp}
-     */
-    private String extractConcertIdFromToken(String queueToken) {
-        if (queueToken == null || queueToken.isBlank()) {
-            throw new QueueTokenInvalidException();
-        }
-
-        String[] parts = queueToken.split(":");
-        if (parts.length < 1 || parts[0].isBlank()) {
-            log.warn("Invalid token format: {}", queueToken);
-            throw new QueueTokenInvalidException();
-        }
-
-        return parts[0];
     }
 }

@@ -7,8 +7,8 @@ import org.springframework.transaction.annotation.Transactional;
 import personal.ai.core.booking.application.port.in.GetAvailableSeatsUseCase;
 import personal.ai.core.booking.application.port.out.QueueServiceClient;
 import personal.ai.core.booking.application.port.out.SeatRepository;
-import personal.ai.core.booking.domain.exception.QueueTokenInvalidException;
 import personal.ai.core.booking.domain.model.Seat;
+import personal.ai.core.booking.domain.service.QueueTokenExtractor;
 
 import java.util.List;
 
@@ -29,8 +29,8 @@ public class AvailableSeatsQueryService implements GetAvailableSeatsUseCase {
     public List<Seat> getAvailableSeats(Long scheduleId, Long userId, String queueToken) {
         log.debug("Getting available seats: scheduleId={}, userId={}", scheduleId, userId);
 
-        // 토큰에서 concertId 추출 (형식: concertId:userId:timestamp)
-        String concertId = extractConcertIdFromToken(queueToken);
+        // 토큰에서 concertId 추출 (형식: concertId:userId:counter)
+        String concertId = QueueTokenExtractor.extractConcertId(queueToken);
 
         // Queue Service에 토큰 검증 요청
         queueServiceClient.validateToken(concertId, userId, queueToken);
@@ -40,23 +40,5 @@ public class AvailableSeatsQueryService implements GetAvailableSeatsUseCase {
         log.debug("Found available seats: scheduleId={}, count={}", scheduleId, availableSeats.size());
 
         return availableSeats;
-    }
-
-    /**
-     * 토큰에서 concertId 추출
-     * 토큰 형식: {concertId}:{userId}:{timestamp}
-     */
-    private String extractConcertIdFromToken(String queueToken) {
-        if (queueToken == null || queueToken.isBlank()) {
-            throw new QueueTokenInvalidException();
-        }
-
-        String[] parts = queueToken.split(":");
-        if (parts.length < 1 || parts[0].isBlank()) {
-            log.warn("Invalid token format: {}", queueToken);
-            throw new QueueTokenInvalidException();
-        }
-
-        return parts[0];
     }
 }
