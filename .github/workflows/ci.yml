@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+# 동시 실행 제어: 같은 브랜치의 이전 워크플로우가 실행 중이면 취소
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # 최신 우분투 사용 (docker 포함 - Testcontainers 실행 가능)
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write      # Check Run API에 접근할 수 있는 권한
+      contents: read
+      pull-requests: write
+
+    steps:
+      # 저장소의 코드 Runner 환경에 내려 받음
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # JAVA21 temurin 셋팅
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'  # gradle 캐시로 빠른 다운로드
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # 테스트 실행 (Unit + Cucumber BDD)
+      # Testcontainers가 MySQL, Redis, Kafka 컨테이너 자동 관리
+      # 테스트 시 필요한 컴파일이 자동 수행됨
+      - name: Run tests with Gradle
+        run: ./gradlew test --no-daemon --stacktrace
+        env:
+          # Testcontainers CI 환경 안정성 옵션
+          # GitHub Actions는 Job 종료 시 VM이 폐기되므로 Ryuk 비활성화 안전
+          # ⚠️ self-hosted runner 사용 시 재검토 필요
+          TESTCONTAINERS_RYUK_DISABLED: true
+          DOCKER_HOST: unix:///var/run/docker.sock
+
+      # 테스트 결과 게시 (멀티 모듈 지원)
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: |
+            **/build/test-results/test/*.xml
+
+      # main 브랜치 푸시 시에만 JAR 빌드 (모듈 명시적 지정)
+      - name: Build JAR for deployment
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: ./gradlew :core-service:bootJar :queue-service:bootJar --no-daemon
+
+      # main 브랜치 푸시 시에만 아티팩트 업로드 (CD에서 사용)
+      - name: Upload build artifacts
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            core-service/build/libs/*.jar
+            queue-service/build/libs/*.jar
+          retention-days: 1
