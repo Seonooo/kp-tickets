@@ -17,7 +17,7 @@ public class TestQueueServiceClientConfig {
     @Bean
     @Primary
     public QueueServiceClient mockQueueServiceClient() {
-        return (userId, queueToken) -> {
+        return (concertId, userId, queueToken) -> {
             // "INVALID" 토큰이 들어오면 예외 발생
             if (queueToken != null && queueToken.contains("INVALID")) {
                 throw new personal.ai.common.exception.BusinessException(
