@@ -45,11 +45,11 @@ jobs:
           echo "Adding IP ${{ steps.ip.outputs.ipv4 }} to security group ${{ secrets.EC2_SECURITY_GROUP_ID }}"
 
           OUTPUT=$(aws ec2 authorize-security-group-ingress \
-              --group-id ${{ secrets.EC2_SECURITY_GROUP_ID }} \
+              --group-id "${{ secrets.EC2_SECURITY_GROUP_ID }}" \
               --protocol tcp \
               --port 22 \
-              --cidr ${{ steps.ip.outputs.ipv4 }}/32 \
-              --description "GitHub Actions - temp" 2>&1) || {
+              --cidr "${{ steps.ip.outputs.ipv4 }}/32" \
+              --description 'GitHub Actions - temp' 2>&1) || {
             if echo "$OUTPUT" | grep -q "InvalidPermission.Duplicate"; then
               echo "IP rule already exists (OK)"
             else
@@ -183,7 +183,7 @@ jobs:
             exit 0
           fi
           aws ec2 revoke-security-group-ingress \
-              --group-id ${{ secrets.EC2_SECURITY_GROUP_ID }} \
+              --group-id "${{ secrets.EC2_SECURITY_GROUP_ID }}" \
               --protocol tcp \
               --port 22 \
-              --cidr ${{ steps.ip.outputs.ipv4 }}/32 || echo "Rule already removed or doesn't exist"
+              --cidr "${{ steps.ip.outputs.ipv4 }}/32" || echo "Rule already removed or doesn't exist"
