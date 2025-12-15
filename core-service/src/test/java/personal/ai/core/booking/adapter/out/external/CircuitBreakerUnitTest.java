@@ -15,6 +15,7 @@ import personal.ai.common.exception.ErrorCode;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
@@ -135,15 +136,19 @@ class CircuitBreakerUnitTest {
                         .withStatus(200)
                         .withFixedDelay(1500))); // 1.5초 지연 -> Read Timeout 발생
 
-        // When: minimumNumberOfCalls(5) 이상 실패
+        // When: minimumNumberOfCalls(5) 이상 실패 (병렬 호출로 5초 윈도우 내 포함)
         // Timeout은 BusinessException이 아니므로 Circuit 실패로 카운트됨
-        for (int i = 0; i < 6; i++) {
-            try {
-                validateToken(1L, "test-token");
-            } catch (Exception e) {
-                // 예외 예상 (Timeout)
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (int i = 0; i < 6; i++) {
+                executor.submit(() -> {
+                    try {
+                        validateToken(1L, "test-token");
+                    } catch (Exception e) {
+                        // 예외 예상 (Timeout)
+                    }
+                });
             }
-        }
+        } // ExecutorService 종료 시 모든 태스크 완료 대기
 
         // Then: Circuit이 OPEN 상태로 전환
         assertThat(circuitBreaker.getState())
