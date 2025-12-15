@@ -37,6 +37,62 @@
 - EC2 인스턴스 생성 시 키 페어 생성 또는 기존 키 사용
 - `.pem` 파일 안전하게 보관
 
+### 4. AWS IAM 사용자 (보안 그룹 동적 IP 관리)
+- **목적**: GitHub Actions가 실행될 때만 보안 그룹에 IP를 추가하고, 완료 후 제거하여 보안 강화
+- **IAM 정책** (보안 그룹 특정):
+  ```json
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupIngress"
+        ],
+        "Resource": "arn:aws:ec2:REGION:ACCOUNT_ID:security-group/SECURITY_GROUP_ID"
+      }
+    ]
+  }
+  ```
+
+  **예시** (실제 값으로 교체 필요):
+  ```json
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupIngress"
+        ],
+        "Resource": "arn:aws:ec2:ap-northeast-2:123456789012:security-group/sg-0123456789abcdef"
+      }
+    ]
+  }
+  ```
+
+  **값 확인 방법:**
+  - `REGION`: AWS 리전 (예: `ap-northeast-2`, `us-east-1`)
+  - `ACCOUNT_ID`: AWS 계정 ID 확인:
+    ```bash
+    aws sts get-caller-identity --query Account --output text
+    ```
+  - `SECURITY_GROUP_ID`: EC2 보안 그룹 ID (예: `sg-0123456789abcdef`)
+
+  > **⚠️ 보안 권장사항**:
+  > - 리소스 ARN에 와일드카드(`*`)를 사용하지 마세요
+  > - 특정 보안 그룹만 명시하여 최소 권한 원칙 적용
+  > - 리전은 `AWS_REGION` Secret과 일치해야 함
+
+- **IAM 사용자 생성**:
+  1. AWS Console → IAM → Users → Create user
+  2. User name: `github-actions-cd`
+  3. Attach policies: 위 JSON 정책 생성 후 연결
+  4. Security credentials → Create access key
+  5. Access key ID와 Secret access key 저장
+
 ---
 
 ## 🔐 GitHub Secrets 설정
@@ -45,15 +101,19 @@ GitHub Repository → Settings → Secrets and variables → Actions → New rep
 
 ### 필수 Secrets
 
-#### 1. 인프라 관련 (5개)
+#### 1. 인프라 관련 (9개)
 
 | Secret 이름 | 설명 | 예시 |
 |------------|------|------|
 | `DOCKERHUB_USERNAME` | Docker Hub 사용자 이름 | `myusername` |
-| `DOCKERHUB_TOKEN` | Docker Hub Access Token | `dckr_pat_xxxxx...` |
+| `DOCKERHUB_TOKEN` | Docker Hub Access Token (Read & Write 권한) | `dckr_pat_xxxxx...` |
 | `EC2_HOST` | EC2 인스턴스 Public IP 또는 도메인 | `13.125.123.456` |
 | `EC2_USERNAME` | EC2 SSH 사용자 이름 | `ubuntu` (Ubuntu AMI 기본값) |
 | `EC2_SSH_KEY` | EC2 SSH Private Key (.pem 파일 내용 전체) | `-----BEGIN RSA PRIVATE KEY-----...` |
+| `AWS_ACCESS_KEY_ID` | AWS IAM Access Key ID (보안 그룹 관리용) | `AKIA...` |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM Secret Access Key | `wJa...` |
+| `AWS_REGION` | AWS 리전 | `ap-northeast-2` |
+| `EC2_SECURITY_GROUP_ID` | EC2 보안 그룹 ID | `sg-0123456789abcdef` |
 
 #### 2. 애플리케이션 환경 변수 (5개)
 
@@ -77,6 +137,20 @@ cat your-key.pem
 # -----BEGIN RSA PRIVATE KEY----- 부터
 # -----END RSA PRIVATE KEY----- 까지
 ```
+
+### 보안 그룹 ID 확인 방법
+
+```bash
+# AWS Console에서 확인:
+# EC2 → Instances → 인스턴스 선택 → Security 탭 → Security groups 클릭
+# 또는
+# EC2 → Security Groups → 해당 보안 그룹 선택 → Details에서 Security group ID 확인
+
+# AWS CLI로 확인:
+aws ec2 describe-security-groups --filters "Name=group-name,Values=your-sg-name" --query 'SecurityGroups[0].GroupId' --output text
+```
+
+> **💡 참고**: 보안 그룹 동적 IP 관리를 사용하면 EC2 보안 그룹에서 SSH 포트를 0.0.0.0/0으로 열어둘 필요가 없습니다. GitHub Actions 실행 시에만 자동으로 IP를 추가하고 완료 후 제거합니다.
 
 ---
 
@@ -151,11 +225,14 @@ GitHub Actions가 자동으로:
    ```
 
 2. **GitHub Actions 자동 실행**:
+   - 현재 GitHub Actions 러너의 공인 IP 가져오기
+   - EC2 보안 그룹에 SSH 규칙 추가 (임시)
    - Docker 이미지 빌드 (core-service, queue-service)
    - Docker Hub에 푸시
    - EC2에 SSH 접속
    - 최신 이미지 Pull
    - 컨테이너 재시작
+   - EC2 보안 그룹에서 SSH 규칙 제거 (자동 cleanup)
 
 3. **배포 확인**:
    ```bash
@@ -201,12 +278,35 @@ docker compose ps
 
 ### 2. EC2 SSH 접속 실패
 
-**증상**: GitHub Actions에서 "Permission denied" 에러
+**증상**: GitHub Actions에서 "Permission denied" 또는 "Connection timeout" 에러
 
 **해결책**:
 - `EC2_SSH_KEY` 전체 내용 확인 (개행 포함)
-- EC2 Security Group에서 SSH(22) 포트 허용 확인
 - EC2 인스턴스가 실행 중인지 확인
+- AWS IAM 권한 확인:
+  ```bash
+  # IAM 사용자에 ec2:AuthorizeSecurityGroupIngress 권한이 있는지 확인
+  ```
+- 보안 그룹 규칙 확인:
+  ```bash
+  # EC2 보안 그룹에서 GitHub Actions IP가 추가되었는지 확인
+  aws ec2 describe-security-groups --group-ids <SECURITY_GROUP_ID>
+  ```
+
+### 2-1. 보안 그룹 IP 추가 실패
+
+**증상**: "An error occurred (InvalidPermission.Duplicate)" 에러
+
+**해결책**:
+- 이미 규칙이 존재하는 경우입니다 (정상)
+- 워크플로우에 `|| echo "Rule may already exist"` 처리되어 있어 무시됨
+
+**증상**: "UnauthorizedOperation" 에러
+
+**해결책**:
+- AWS IAM 사용자 권한 확인
+- `AWS_ACCESS_KEY_ID`와 `AWS_SECRET_ACCESS_KEY` 확인
+- IAM 정책에 `ec2:AuthorizeSecurityGroupIngress`, `ec2:RevokeSecurityGroupIngress` 포함 여부 확인
 
 ### 3. 컨테이너 시작 실패
 
@@ -351,17 +451,28 @@ docker compose up -d --force-recreate core-service
    - `.pem` 파일 권한: `chmod 400 your-key.pem`
    - 정기적으로 키 교체
 
-3. **방화벽 설정**:
+3. **동적 IP 관리 (보안 강화)**:
+   - GitHub Actions 실행 시에만 보안 그룹에 IP 추가
+   - 완료 후 자동으로 IP 제거
+   - EC2 보안 그룹에서 SSH 포트를 0.0.0.0/0으로 열 필요 없음
+   - 최소 권한 원칙 적용
+
+4. **AWS IAM 최소 권한**:
+   - IAM 사용자에 필요한 권한만 부여
+   - 정기적으로 Access Key 교체
+   - CloudTrail로 API 호출 모니터링
+
+5. **방화벽 설정**:
    ```bash
    sudo ufw enable
    sudo ufw status
    ```
 
-4. **Docker Hub Token**:
-   - 최소 권한 원칙 (필요한 권한만 부여)
+6. **Docker Hub Token**:
+   - Read & Write 권한만 부여 (Delete 불필요)
    - 정기적으로 토큰 교체
 
-5. **데이터베이스 비밀번호**:
+7. **데이터베이스 비밀번호**:
    - 강력한 비밀번호 사용 (16자 이상, 특수문자 포함)
    - 정기적으로 비밀번호 변경
 
@@ -379,10 +490,15 @@ docker compose up -d --force-recreate core-service
 
 배포 전 확인사항:
 
-- [ ] Docker Hub 계정 및 토큰 준비
+- [ ] Docker Hub 계정 및 토큰 준비 (Read & Write 권한)
+- [ ] AWS IAM 사용자 생성 및 정책 설정
 - [ ] EC2 인스턴스 생성 및 Security Group 설정
 - [ ] SSH 키 페어 생성 및 저장
-- [ ] GitHub Secrets 등록 (10개: 인프라 5개 + 환경변수 5개)
+- [ ] GitHub Secrets 등록 (14개: 인프라 9개 + 환경변수 5개)
+  - Docker Hub: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
+  - EC2: `EC2_HOST`, `EC2_USERNAME`, `EC2_SSH_KEY`
+  - AWS: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `EC2_SECURITY_GROUP_ID`
+  - DB: `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `REDIS_PASSWORD`
 - [ ] EC2 초기 설정 스크립트 실행
 - [ ] Docker Hub 로그인 (EC2에서)
 - [ ] 첫 배포 (GitHub Actions 자동 실행)
