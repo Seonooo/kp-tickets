@@ -42,12 +42,24 @@ jobs:
       # 4. GitHub Actions IP를 보안 그룹에 추가
       - name: Add GitHub Actions IP to Security Group
         run: |
-          aws ec2 authorize-security-group-ingress \
+          echo "Adding IP ${{ steps.ip.outputs.ipv4 }} to security group ${{ secrets.EC2_SECURITY_GROUP_ID }}"
+
+          OUTPUT=$(aws ec2 authorize-security-group-ingress \
               --group-id ${{ secrets.EC2_SECURITY_GROUP_ID }} \
               --protocol tcp \
               --port 22 \
               --cidr ${{ steps.ip.outputs.ipv4 }}/32 \
-              --description "GitHub Actions - temp" || echo "Rule may already exist"
+              --description "GitHub Actions - temp" 2>&1) || {
+            if echo "$OUTPUT" | grep -q "InvalidPermission.Duplicate"; then
+              echo "IP rule already exists (OK)"
+            else
+              echo "Failed to add security group rule:"
+              echo "$OUTPUT"
+              exit 1
+            fi
+          }
+
+          echo "Successfully added IP to security group"
 
       # 5. Java 21 설정 (빌드용)
       - name: Set up Java 21
