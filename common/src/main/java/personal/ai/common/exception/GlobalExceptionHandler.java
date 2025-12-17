@@ -42,7 +42,11 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> handleMethodArgumentNotValidException(
                         org.springframework.web.bind.MethodArgumentNotValidException e) {
                 log.warn("Validation failed: {}", e.getMessage());
-                String message = e.getBindingResult().getAllErrors().get(0).getDefaultMessage();
+                // 방어적 코딩: 에러 목록이 비어있을 수 있음 (이론적으로)
+                String message = "입력값이 유효하지 않습니다.";
+                if (!e.getBindingResult().getAllErrors().isEmpty()) {
+                        message = e.getBindingResult().getAllErrors().get(0).getDefaultMessage();
+                }
                 ErrorResponse response = ErrorResponse.of(ErrorCode.INVALID_INPUT, message);
                 return ResponseEntity.status(ErrorCode.INVALID_INPUT.getHttpStatus()).body(response);
         }
