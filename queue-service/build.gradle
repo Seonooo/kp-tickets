@@ -8,6 +8,7 @@ dependencies {
 
     // Queue Service 전용 Spring Boot Starters
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'

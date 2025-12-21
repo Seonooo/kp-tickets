@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'concert-booking'
+    env: 'local'
+
+# Spring Boot Actuator 메트릭 수집
+scrape_configs:
+  # Core Service 모니터링
+  - job_name: 'core-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['core-service:8080']
+        labels:
+          service: 'core-service'
+          instance: 'core-1'
+
+  # Queue Service 모니터링
+  - job_name: 'queue-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['queue-service:8081']
+        labels:
+          service: 'queue-service'
+          instance: 'queue-1'
+
+  # Redis 모니터링
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'redis'
+          instance: 'redis-1'
