@@ -14,11 +14,11 @@ ON DUPLICATE KEY UPDATE venue = 'Seoul Olympic Stadium';
 -- 기존 좌석 삭제
 DELETE FROM seats WHERE schedule_id = 1;
 
--- 좌석 데이터 생성 (100개)
+-- 좌석 데이터 생성 (100개) - R등급
 INSERT INTO seats (schedule_id, seat_number, status, price, grade)
 SELECT
     1,
-    CONCAT('A-', LPAD(seq, 3, '0')),
+    CONCAT('R-', LPAD(seq, 3, '0')),
     'AVAILABLE',
     50000.00,
     'R'
