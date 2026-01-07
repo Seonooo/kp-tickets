@@ -28,9 +28,11 @@ export function validateErrorResponse(response, expectedStatus, expectedCode) {
   };
 }
 
-// 랜덤 userId 생성
+// 랜덤 userId 생성 (Queue Service: String, Core Service: Long 호환)
 export function randomUserId() {
-  return `USER-${Math.floor(Math.random() * 1000000)}`;
+  // Generate numeric user ID compatible with both services
+  // Range: 1000000000 ~ 9999999999 (10-digit numeric ID)
+  return String(Math.floor(Math.random() * 9000000000) + 1000000000);
 }
 
 // 응답 시간 체크
