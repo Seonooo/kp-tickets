@@ -15,7 +15,6 @@ import personal.ai.core.booking.application.port.in.GetReservationUseCase;
 import personal.ai.core.booking.application.port.in.ReserveSeatCommand;
 import personal.ai.core.booking.application.port.in.ReserveSeatUseCase;
 import personal.ai.core.booking.domain.model.Reservation;
-import personal.ai.core.booking.domain.model.Seat;
 
 import java.util.List;
 
@@ -36,6 +35,8 @@ public class BookingController {
     /**
      * 예약 가능한 좌석 목록 조회
      * GET /api/v1/schedules/{scheduleId}/seats
+     *
+     * 성능 최적화: Response DTO를 직접 반환하여 매핑 단계 제거
      */
     @GetMapping("/schedules/{scheduleId}/seats")
     public ResponseEntity<List<SeatResponse>> getAvailableSeats(
@@ -43,13 +44,17 @@ public class BookingController {
             @RequestHeader("X-User-Id") Long userId,
             @RequestHeader("X-Queue-Token") String queueToken
     ) {
+        long controllerStartTime = System.currentTimeMillis();
         log.info("Get available seats: scheduleId={}, userId={}", scheduleId, userId);
 
-        List<Seat> seats = getAvailableSeatsUseCase.getAvailableSeats(scheduleId, userId, queueToken);
+        long serviceCallStart = System.currentTimeMillis();
+        List<SeatResponse> response = getAvailableSeatsUseCase.getAvailableSeats(scheduleId, userId, queueToken);
+        long serviceCallTime = System.currentTimeMillis() - serviceCallStart;
 
-        List<SeatResponse> response = seats.stream()
-                .map(SeatResponse::from)
-                .toList();
+        long totalControllerTime = System.currentTimeMillis() - controllerStartTime;
+
+        log.info("Controller timing - scheduleId: {}, total: {}ms, serviceCall: {}ms, seatCount: {}",
+                scheduleId, totalControllerTime, serviceCallTime, response.size());
 
         return ResponseEntity.ok(response);
     }
