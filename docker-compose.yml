@@ -33,18 +33,18 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 3G
 
-  # 2. Cache & Queue Service (Redis) - 양쪽 서비스 공유
-  cache:
+  # 2-1. Queue Redis (Queue Service 전용 - Active + Waiting Queue)
+  redis-queue:
     image: redis:7.2-alpine
-    container_name: concert-cache
+    container_name: concert-redis-queue
     restart: unless-stopped
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
+    command: redis-server --appendonly yes --maxmemory 1536mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
     volumes:
-      - cache_data:/data
+      - redis_queue_data:/data
     networks:
       - concert-network
     healthcheck:
@@ -57,19 +57,71 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
 
-  # 3. Redis Exporter (Redis 메트릭 수집)
-  redis-exporter:
+  # 2-2. Core Service Redis (좌석 선점, 예약 캐시)
+  redis-core:
+    image: redis:7.2-alpine
+    container_name: concert-redis-core
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_core_data:/data
+    networks:
+      - concert-network
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=${REDIS_PASSWORD} redis-cli ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # 3-1. Redis Exporter - Queue
+  redis-exporter-queue:
     image: oliver006/redis_exporter:v1.55.0-alpine
-    container_name: concert-redis-exporter
+    container_name: concert-redis-exporter-queue
     restart: unless-stopped
     ports:
       - "9121:9121"
     environment:
-      REDIS_ADDR: "cache:6379"
+      REDIS_ADDR: "redis-queue:6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     depends_on:
-      cache:
+      redis-queue:
+        condition: service_healthy
+    networks:
+      - concert-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 3-2. Redis Exporter - Core
+  redis-exporter-core:
+    image: oliver006/redis_exporter:v1.55.0-alpine
+    container_name: concert-redis-exporter-core
+    restart: unless-stopped
+    ports:
+      - "9122:9121"
+    environment:
+      REDIS_ADDR: "redis-core:6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      redis-core:
         condition: service_healthy
     networks:
       - concert-network
@@ -118,7 +170,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 3G
 
 
 
@@ -133,8 +185,8 @@ services:
       - "${CORE_SERVICE_PORT:-8080}:8080"
       - "${CORE_DEBUG_PORT:-5005}:5005"
     environment:
-      # JVM Options
-      JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Xms512m -Xmx512m"
+      # JVM Options - Heap 2GB + ZGC (초저지연 GC)
+      JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Xms1g -Xmx2g -XX:+UseZGC -XX:+ZGenerational"
 
       # Spring Profile
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
@@ -144,10 +196,18 @@ services:
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
 
-      # Redis
-      SPRING_REDIS_HOST: cache
+      # Database Connection Pool (HikariCP)
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${DB_POOL_MAX_SIZE:-50}
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: ${DB_POOL_MIN_IDLE:-10}
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: ${DB_CONNECTION_TIMEOUT:-30000}
+      SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT: ${DB_IDLE_TIMEOUT:-600000}
+      SPRING_DATASOURCE_HIKARI_MAX_LIFETIME: ${DB_MAX_LIFETIME:-1800000}
+
+      # Redis (Core Service 전용)
+      SPRING_REDIS_HOST: redis-core
       SPRING_REDIS_PORT: 6379
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SPRING_REDIS_TIMEOUT: 3000
 
       # Kafka
       SPRING_KAFKA_BOOTSTRAP_SERVERS: broker:9092
@@ -157,7 +217,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      cache:
+      redis-core:
         condition: service_healthy
       broker:
         condition: service_healthy
@@ -171,7 +231,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 3G
 
   # 6. Queue Service (대기열 전용)
   queue-service:
@@ -190,16 +250,17 @@ services:
       # Spring Profile
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
 
-      # Redis
-      SPRING_REDIS_HOST: cache
+      # Redis - Queue (Active + Waiting Queue)
+      SPRING_REDIS_HOST: redis-queue
       SPRING_REDIS_PORT: 6379
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
-      REDIS_POOL_MAX_ACTIVE: ${REDIS_POOL_MAX_ACTIVE:-20}
+      SPRING_REDIS_TIMEOUT: 3000
+      REDIS_POOL_MAX_ACTIVE: ${REDIS_POOL_MAX_ACTIVE:-50}
 
       # Kafka
       SPRING_KAFKA_BOOTSTRAP_SERVERS: broker:9092
     depends_on:
-      cache:
+      redis-queue:
         condition: service_healthy
       broker:
         condition: service_healthy
@@ -287,7 +348,8 @@ networks:
 
 volumes:
   db_data:
-  cache_data:
+  redis_queue_data:
+  redis_core_data:
   broker_data:
   prometheus_data:
   grafana_data:

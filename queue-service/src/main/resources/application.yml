@@ -10,14 +10,20 @@ spring:
 
   data:
     redis:
+      # Queue Redis (Active + Waiting Queue 통합)
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
       password: ${SPRING_REDIS_PASSWORD:}
+      timeout: ${SPRING_REDIS_TIMEOUT:3000}
       lettuce:
         pool:
-          max-active: ${REDIS_POOL_MAX_ACTIVE:20}  # 대량 트래픽 대비 증가
-          max-idle: ${REDIS_POOL_MAX_IDLE:20}
-          min-idle: ${REDIS_POOL_MIN_IDLE:5}
+          max-active: ${REDIS_POOL_MAX_ACTIVE:50}  # 대규모 트래픽 대응 (2GB heap 고려)
+          max-idle: ${REDIS_POOL_MAX_IDLE:25}
+          min-idle: ${REDIS_POOL_MIN_IDLE:10}
+        cluster:
+          refresh:
+            adaptive: true
+            period: 30s
 
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -45,12 +51,12 @@ queue:
 
   # 활성 대기열 설정
   active:
-    max-size: ${QUEUE_ACTIVE_MAX_SIZE:50000}  # 동시 처리 가능 인원 (대규모 트래픽 대비)
+    max-size: ${QUEUE_ACTIVE_MAX_SIZE:50000}  # Phase 4: 현실적 크기로 복원 (순환 테스트용)
     token-ttl-seconds: ${QUEUE_ACTIVE_TOKEN_TTL:300}  # 토큰 유효시간 (5분)
 
   # 스케줄러 설정
   scheduler:
-    activation-interval-ms: ${QUEUE_ACTIVATION_INTERVAL:5000}  # 활성화 주기 (5초)
+    activation-interval-ms: ${QUEUE_ACTIVATION_INTERVAL:1000}  # 활성화 주기 (1초) - 5배 빠름!
     cleanup-interval-ms: ${QUEUE_CLEANUP_INTERVAL:1000}  # 만료 토큰 정리 주기 (1초)
 
   # 폴링 설정
@@ -63,6 +69,16 @@ queue:
     rate-limit-capacity: ${QUEUE_POLLING_RATE_LIMIT_CAPACITY:10}    # 버킷 최대 용량 (10개)
     rate-limit-refill-rate: ${QUEUE_POLLING_RATE_LIMIT_REFILL:0.5}  # 초당 리필 토큰 수 (0.5 = 2초당 1개)
     executor-pool-size: ${QUEUE_POLLING_EXECUTOR_POOL_SIZE:10}      # Virtual Thread Executor 풀 크기
+
+  # 캐싱 설정 (Quick Win 최적화)
+  cache:
+    total-waiting-ttl-seconds: ${QUEUE_CACHE_TOTAL_WAITING_TTL:60}  # totalWaiting 캐시 TTL (60초)
+
+# 스케줄러 락 설정 (헥사고날 Adapter 패턴)
+scheduler:
+  lock:
+    strategy: ${SCHEDULER_LOCK_STRATEGY:cluster}  # none | cluster (Phase 2: 분산 환경)
+    ttl-seconds: ${SCHEDULER_LOCK_TTL:30}         # 락 TTL (초)
 
 # Kafka Topic 설정
 kafka:
@@ -81,6 +97,10 @@ management:
       probes:
         enabled: true
   metrics:
+    tags:
+      # 인스턴스 식별 태그 (스케일 아웃 시 인스턴스별 메트릭 구분)
+      instance: ${INSTANCE_ID:instance-1}
+      service: queue-service
     distribution:
       percentiles-histogram:
         http.server.requests: true
