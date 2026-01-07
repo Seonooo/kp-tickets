@@ -2,15 +2,20 @@ package personal.ai.queue.application.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
+import personal.ai.queue.adapter.out.redis.RedisKeyGenerator;
+import personal.ai.queue.application.config.QueueConfigProperties;
 import personal.ai.queue.application.port.out.QueueRepository;
 import personal.ai.queue.domain.model.QueueConfig;
 import personal.ai.queue.domain.model.QueuePosition;
 
+import java.time.Duration;
 import java.util.Optional;
 
 /**
  * 대기열 진입 검증 구현체
+ * Quick Win 최적화: totalWaiting 캐싱으로 ZCARD 호출 빈도 감소
  */
 @Slf4j
 @Component
@@ -21,6 +26,8 @@ public class QueueEntryValidatorImpl implements QueueEntryValidator {
 
     private final QueueRepository queueRepository;
     private final QueueConfig queueConfig;
+    private final RedisTemplate<String, String> redisTemplate;
+    private final QueueConfigProperties queueConfigProperties;
 
     @Override
     public Optional<QueuePosition> checkActiveUser(String concertId, String userId) {
