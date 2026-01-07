@@ -48,7 +48,7 @@ erDiagram
     }
 
     %% Booking Domain (Transactional)
-    BOOKING {
+    RESERVATIONS {
         bigint id PK
         bigint user_id "Logical Reference"
         bigint concert_schedule_id
@@ -90,8 +90,8 @@ erDiagram
 
     CONCERT ||--|{ CONCERT_SCHEDULE : has
     CONCERT_SCHEDULE ||--|{ SEAT : contains
-    BOOKING ||--|| PAYMENT : triggers
-    SEAT ||--o{ BOOKING : reserved_by
+    RESERVATIONS ||--|| PAYMENT : triggers
+    SEAT ||--o{ RESERVATIONS : reserved_by
 ```
 
 ### 1.2 Table Specifications & Constraints
@@ -107,16 +107,16 @@ erDiagram
 - **Concurrency Strategy:**
     - **Primary Lock:** Redis `SETNX seat:{scheduleId}:{seatId}`로 원자적 선점 제어.
     - **DB 역할:** 영구 저장 및 상태 관리 (Redis 선점 성공 후 업데이트).
-    - **Final Barrier:** `booking` 테이블의 Unique Constraint가 최종 방어선 역할.
+    - **Final Barrier:** `reservations` 테이블의 Unique Constraint가 최종 방어선 역할.
 - **Index:** `idx_schedule_status` (`concert_schedule_id`, `status`) - 스케줄별 잔여 좌석 조회 최적화.
 
-#### C. `booking` (예매 - Order)
+#### C. `reservations` (예매 - Order)
 
 - **Role:** 좌석 선점 및 결제 상태를 관리하는 핵심 트랜잭션 테이블.
 - **Concurrency Control (Critical):**
     - **최종 방어선(Final Barrier):** Redis `SETNX` 이후 DB 레벨 중복 방지.
-    - **Unique Constraint:** `UK_booking_seat_schedule` (`seat_id`, `concert_schedule_id`)
-    - **보장사항:** 특정 회차의 특정 좌석에 대해 단 하나의 활성 Booking만 존재 가능.
+    - **Unique Constraint:** `uk_schedule_seat` (`schedule_id`, `seat_id`)
+    - **보장사항:** 특정 회차의 특정 좌석에 대해 단 하나의 활성 Reservation만 존재 가능.
     - **효과:** Redis 장애/Eviction 등 예외 상황에서도 DB가 데이터 정합성 보장.
 - **Index:** `idx_user_status` (`user_id`, `status`) - 사용자별 예약 내역 조회 최적화.
 
@@ -139,9 +139,9 @@ erDiagram
 
 | Key Pattern | 자료구조 | TTL | 설명 |
 |:---|:---:|:---:|:---|
-| **`queue:wait:{scheduleId}`** | **ZSet** | N/A | **스케줄별 대기열 (Waiting)**<br>- Member: `userId`<br>- Score: `Timestamp` (진입 시각)<br>- *용도:* 스케줄별 대기열 분리로 성능 향상 및 동시성 제어 |
-| **`queue:active:{scheduleId}`** | **ZSet** | N/A | **스케줄별 활성열 (Active Management)**<br>- Member: `userId`<br>- Score: `ExpireTimestamp` (만료 시각)<br>- *용도:* 인원 수 제한(`ZCARD`) 및 만료 청소(`ZREMRANGE...`) |
-| **`active:token:{userId}`** | **Hash** | 5\~10분 | **접근 토큰 (Validation)**<br>- `token`: UUID<br>- `status`: "ACTIVE"<br>- `concert_schedule_id`: 진입한 스케줄 ID<br>- `extend_count`: 연장 횟수 (0\~2)<br>- *용도:* API 검증 및 메타데이터 관리 (CPU 효율) |
+| **`queue:wait:{concertId}`** | **ZSet** | N/A | **콘서트별 대기열 (Waiting)**<br>- Member: `userId`<br>- Score: `Timestamp` (진입 시각)<br>- *용도:* 콘서트별 대기열 분리로 성능 향상 및 동시성 제어 |
+| **`queue:active:{concertId}`** | **ZSet** | N/A | **콘서트별 활성열 (Active Management)**<br>- Member: `userId`<br>- Score: `ExpireTimestamp` (만료 시각)<br>- *용도:* 인원 수 제한(`ZCARD`) 및 만료 청소(`ZREMRANGE...`) |
+| **`active:token:{concertId}:{userId}`** | **Hash** | 5\~10분 | **접근 토큰 (Validation)**<br>- `token`: UUID<br>- `status`: "ACTIVE"<br>- `extend_count`: 연장 횟수 (0\~2)<br>- *용도:* API 검증 및 메타데이터 관리 (CPU 효율) |
 
 ### 2.2 Booking Domain (Concurrency Control)
 
@@ -167,7 +167,7 @@ SETNX seat:{scheduleId}:{seatId} {userId} EX 300
 BEGIN TRANSACTION;
 
 -- 1. 예약 기록 생성
-INSERT INTO booking (user_id, concert_schedule_id, seat_id, status)
+INSERT INTO reservations (user_id, schedule_id, seat_id, status)
 VALUES ({userId}, {scheduleId}, {seatId}, 'PENDING');
 
 -- 2. 좌석 상태 업데이트
@@ -179,7 +179,7 @@ WHERE id = {seatId}
 
 COMMIT;
 ```
-- **Unique Constraint 방어:** Redis 장애 시에도 `UK_booking_seat_schedule`이 중복 방지.
+- **Unique Constraint 방어:** Redis 장애 시에도 `uk_schedule_seat`이 중복 방지.
 - **Version 불필요:** Redis 선점으로 이미 동시성 제어 완료, DB는 순수 저장 역할.
 
 ### 3.2 Cleanup Strategy (Data Consistency)
@@ -189,7 +189,7 @@ COMMIT;
 BEGIN TRANSACTION;
 
 -- 1. DB 상태 업데이트
-UPDATE booking SET status = 'CANCEL' WHERE id = {bookingId};
+UPDATE reservations SET status = 'CANCEL' WHERE id = {reservationId};
 UPDATE seat SET status = 'AVAILABLE' WHERE id = {seatId};
 
 COMMIT;
