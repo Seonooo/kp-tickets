@@ -1,5 +1,7 @@
 package personal.ai.queue.adapter.out.redis;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -30,6 +32,7 @@ public class RedisLuaScriptExecutor {
     private final RedisScript<Long> removeFromActiveQueueScript;
     private final RedisScript<String> moveToActiveQueueScript;
     private final RedisScript<Long> activateTokenScript;
+    private final MeterRegistry meterRegistry;
 
     /**
      * Active Queue에 토큰을 추가합니다 (원자적 작업).
@@ -80,6 +83,7 @@ public class RedisLuaScriptExecutor {
     public Long executeRemoveExpiredTokens(String activeQueueKey, String concertId) {
         long now = Instant.now().getEpochSecond();
 
+        Timer.Sample sample = Timer.start(meterRegistry);
         Long removedCount = redisTemplate.execute(
                 removeExpiredTokensScript,
                 List.of(activeQueueKey),
@@ -88,6 +92,10 @@ public class RedisLuaScriptExecutor {
                 ACTIVE_TOKEN_PREFIX,
                 concertId
         );
+        sample.stop(Timer.builder("redis.script.duration")
+                .tag("script", "remove_expired_tokens")
+                .description("Redis Lua script execution time")
+                .register(meterRegistry));
 
         if (removedCount != null && removedCount > 0) {
             log.debug("Executed removeExpiredTokens script: concertId={}, removed={}", concertId, removedCount);
@@ -176,6 +184,7 @@ public class RedisLuaScriptExecutor {
             Instant expiredAt,
             long ttlSeconds) {
 
+        Timer.Sample sample = Timer.start(meterRegistry);
         String jsonResult = redisTemplate.execute(
                 moveToActiveQueueScript,
                 List.of(waitQueueKey, activeQueueKey),
@@ -185,6 +194,10 @@ public class RedisLuaScriptExecutor {
                 concertId,
                 String.valueOf(ttlSeconds)
         );
+        sample.stop(Timer.builder("redis.script.duration")
+                .tag("script", "move_to_active_queue")
+                .description("Redis Lua script execution time")
+                .register(meterRegistry));
 
         if (jsonResult != null && !jsonResult.isEmpty() && !jsonResult.equals("[]")) {
             log.debug("Executed moveToActiveQueue script: concertId={}, result={}", concertId, jsonResult);
@@ -210,6 +223,7 @@ public class RedisLuaScriptExecutor {
             Instant newExpiredAt,
             long ttlSeconds) {
 
+        Timer.Sample sample = Timer.start(meterRegistry);
         Long result = redisTemplate.execute(
                 activateTokenScript,
                 List.of(activeQueueKey, tokenKey),
@@ -217,6 +231,10 @@ public class RedisLuaScriptExecutor {
                 String.valueOf(newExpiredAt.getEpochSecond()),
                 String.valueOf(ttlSeconds)
         );
+        sample.stop(Timer.builder("redis.script.duration")
+                .tag("script", "activate_token")
+                .description("Redis Lua script execution time")
+                .register(meterRegistry));
 
         if (result != null && result == 1L) {
             log.debug("Executed activateToken script: userId={} (activated)", userId);
