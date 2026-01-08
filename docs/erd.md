@@ -61,7 +61,7 @@ erDiagram
     %% Payment Domain (Log)
     PAYMENT {
         bigint id PK
-        bigint booking_id
+        bigint reservation_id
         decimal amount
         varchar status "COMPLETED, FAILED"
         datetime approved_at

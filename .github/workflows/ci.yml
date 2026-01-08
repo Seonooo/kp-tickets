@@ -39,8 +39,9 @@ jobs:
       # 테스트 실행 (Unit + Cucumber BDD)
       # Testcontainers가 MySQL, Redis, Kafka 컨테이너 자동 관리
       # 테스트 시 필요한 컴파일이 자동 수행됨
+      # e2e-tests는 실제 서비스가 필요하므로 CI에서 제외
       - name: Run tests with Gradle
-        run: ./gradlew test --no-daemon --stacktrace
+        run: ./gradlew test --no-daemon --stacktrace -x :e2e-tests:test
         env:
           # Testcontainers CI 환경 안정성 옵션
           # GitHub Actions는 Job 종료 시 VM이 폐기되므로 Ryuk 비활성화 안전

@@ -105,8 +105,9 @@ resilience4j:
     instances:
       queueService:
         # Queue Service 응답 시간 측정 결과 (P95: 2.65ms at 100 req/sec)
-        # Little's Law: 100 req/sec × 0.003s = 0.3개 필요
-        # 안전 계수 적용: 0.3 × 100 = 30 (메모리 최적화)
+        # Little's Law 계산: 100 req/sec × 0.003s = 0.3개 (이론적 최소값)
+        # 실제 설정: 100 (버스트 트래픽, 순간적 지연 대응을 위한 충분한 여유 확보)
+        # 이유: P99 레이턴시 스파이크(100ms+) 발생 시에도 요청 거부 없이 처리
         maxConcurrentCalls: 100
         maxWaitDuration: 100ms  # 일시적 버스트 트래픽 흡수
 

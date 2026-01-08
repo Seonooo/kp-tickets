@@ -267,7 +267,8 @@ services:
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
       # Redis Cluster 설정
-      SPRING_REDIS_CLUSTER_NODES: redis-node-1:6379,redis-node-2:6379,redis-node-3:6379
+      SPRING_DATA_REDIS_CLUSTER_NODES: redis-node-1:6379,redis-node-2:6379,redis-node-3:6379
+      SPRING_DATA_REDIS_CLUSTER_MAX_REDIRECTS: 3
       SPRING_KAFKA_BOOTSTRAP_SERVERS: broker:9092
       QUEUE_SERVICE_URL: http://queue-service:8081
     depends_on:

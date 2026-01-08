@@ -2,6 +2,7 @@ package personal.ai.core.admin.adapter.in.web;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,11 +15,12 @@ import java.util.Map;
  * Admin Test Data Controller
  *
  * WARNING: 성능 테스트 전용 API입니다.
- * 프로덕션 환경에서는 비활성화해야 합니다.
+ * 프로덕션 환경에서는 자동 비활성화됩니다. (@Profile("!prod"))
  */
 @Slf4j
 @RestController
 @RequestMapping("/api/admin/test-data")
+@Profile("!prod")
 @RequiredArgsConstructor
 public class AdminTestDataController {
 
@@ -49,7 +51,6 @@ public class AdminTestDataController {
                 "success", true,
                 "message", "Test data initialized successfully",
                 "duration_ms", duration,
-                "data", counts
-        ));
+                "data", counts));
     }
 }

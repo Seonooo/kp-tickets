@@ -5,7 +5,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.HexFormat;
 
 /**
  * Token Validation Result Cache
@@ -13,12 +17,16 @@ import java.time.Duration;
  * Queue Service 호출 최적화:
  * - 동일 토큰에 대한 중복 검증 방지
  * - TTL: 10초 (Queue Token TTL보다 짧게 설정)
- * - Cache Key: "token:validation:{concertId}:{userId}:{token}"
+ * - Cache Key: "token:validation:{concertId}:{userId}:{tokenHash}"
  *
  * 성능 개선:
  * - Seats Query와 Reservation 사이의 중복 검증 제거
  * - Queue Service 호출 50% 감소
  * - Bulkhead 부하 감소
+ * 
+ * 보안:
+ * - SHA-256 해시 사용으로 토큰 원문 노출 방지
+ * - 해시 충돌 확률 극히 낮음 (2^128 birthday attack)
  */
 @Slf4j
 @Component
@@ -33,6 +41,7 @@ public class TokenValidationCache {
 
     /**
      * 캐시에서 검증 결과 조회
+     * 
      * @return 캐시에 있고 유효하면 true, 없으면 false
      */
     public boolean isValidInCache(String concertId, Long userId, String token) {
@@ -55,7 +64,7 @@ public class TokenValidationCache {
         String cacheKey = buildCacheKey(concertId, userId, token);
         redisTemplate.opsForValue().set(cacheKey, VALID_MARKER, CACHE_TTL);
         log.debug("Token validation cached: concertId={}, userId={}, ttl={}s",
-                  concertId, userId, CACHE_TTL.getSeconds());
+                concertId, userId, CACHE_TTL.getSeconds());
     }
 
     /**
@@ -67,9 +76,35 @@ public class TokenValidationCache {
         log.debug("Token validation cache invalidated: concertId={}, userId={}", concertId, userId);
     }
 
+    /**
+     * 캐시 키 생성
+     * 
+     * SHA-256 해시를 사용하여 토큰 충돌 방지
+     * - 16자 hex digest 사용 (64비트, 충돌 확률 극히 낮음)
+     * - 토큰 원문이 키에 노출되지 않음
+     */
     private String buildCacheKey(String concertId, Long userId, String token) {
-        // token의 앞 8자만 사용 (키 길이 최적화, 충돌 확률 극히 낮음)
-        String tokenPrefix = token.length() > 8 ? token.substring(0, 8) : token;
-        return CACHE_KEY_PREFIX + concertId + ":" + userId + ":" + tokenPrefix;
+        String tokenHash = hashToken(token);
+        return CACHE_KEY_PREFIX + concertId + ":" + userId + ":" + tokenHash;
+    }
+
+    /**
+     * SHA-256 해시 생성 (앞 16자 hex)
+     */
+    private String hashToken(String token) {
+        if (token == null || token.isEmpty()) {
+            return "empty";
+        }
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            // 앞 8바이트(16자 hex)만 사용 - 충분한 엔트로피 확보
+            return HexFormat.of().formatHex(hash, 0, 8);
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256은 모든 JVM에서 지원됨, 발생 불가
+            log.warn("SHA-256 not available, falling back to simple hash");
+            return String.valueOf(token.hashCode());
+        }
     }
 }

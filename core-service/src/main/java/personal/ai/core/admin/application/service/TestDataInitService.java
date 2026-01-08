@@ -2,6 +2,7 @@ package personal.ai.core.admin.application.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,10 +14,11 @@ import java.util.Map;
  *
  * 성능 테스트를 위한 초기 데이터 생성 서비스
  *
- * WARNING: 테스트 전용 API - 프로덕션에서 비활성화 필요
+ * WARNING: 테스트 전용 API - 프로덕션에서 자동 비활성화됨 (@Profile("!prod"))
  */
 @Slf4j
 @Service
+@Profile("!prod")
 @RequiredArgsConstructor
 public class TestDataInitService {
 
@@ -48,8 +50,7 @@ public class TestDataInitService {
         return Map.of(
                 "concerts", 1L,
                 "schedules", 1L,
-                "seats", seatCount
-        );
+                "seats", seatCount);
     }
 
     /**
@@ -80,8 +81,7 @@ public class TestDataInitService {
         log.debug("Creating test concert...");
 
         jdbcTemplate.update(
-                "INSERT INTO concerts (id, name, description) VALUES (1, 'K6 Performance Test Concert', '성능 테스트용 콘서트')"
-        );
+                "INSERT INTO concerts (id, name, description) VALUES (1, 'K6 Performance Test Concert', '성능 테스트용 콘서트')");
 
         log.debug("Concert created - id: 1");
     }
@@ -94,8 +94,7 @@ public class TestDataInitService {
 
         jdbcTemplate.update(
                 "INSERT INTO concert_schedules (id, concert_id, performance_date, venue) " +
-                        "VALUES (1, 1, '2025-12-25 19:00:00', 'Test Arena')"
-        );
+                        "VALUES (1, 1, '2025-12-25 19:00:00', 'Test Arena')");
 
         log.debug("Schedule created - id: 1");
     }
@@ -143,13 +142,17 @@ public class TestDataInitService {
                 "  SELECT @row := @row + 1 as seq " +
                 "  FROM " +
                 "    (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 " +
-                "     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t1, " +
+                "     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t1, "
+                +
                 "    (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 " +
-                "     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t2, " +
+                "     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t2, "
+                +
                 "    (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 " +
-                "     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t3, " +
+                "     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t3, "
+                +
                 "    (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 " +
-                "     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t4, " +
+                "     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t4, "
+                +
                 "    (SELECT @row := 0) r " +
                 "  LIMIT ? " +
                 ") as numbers";
