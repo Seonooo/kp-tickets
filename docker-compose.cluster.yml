@@ -281,6 +281,7 @@ services:
       # Redis Cluster 설정
       SPRING_DATA_REDIS_CLUSTER_NODES: redis-node-1:6379,redis-node-2:6379,redis-node-3:6379
       SPRING_DATA_REDIS_CLUSTER_MAX_REDIRECTS: 3
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: broker:9092
       QUEUE_SERVICE_URL: http://queue-service:8081
     depends_on:
@@ -305,8 +306,8 @@ services:
       context: .
       dockerfile: queue-service/Dockerfile
     restart: unless-stopped
-    ports:
-      - "8081:8081"  # 첫 번째 인스턴스만 호스트 포트로 노출 (e2e 테스트용)
+    # NOTE: ports 제거 - 스케일링 시 포트 충돌 방지
+    # E2E 테스트는 Docker 네트워크 내부에서 진행하거나 별도 LB 사용
     expose:
       - "8081"
     environment:
@@ -315,6 +316,7 @@ services:
       # Redis Cluster 설정
       SPRING_DATA_REDIS_CLUSTER_NODES: redis-node-1:6379,redis-node-2:6379,redis-node-3:6379
       SPRING_DATA_REDIS_CLUSTER_MAX_REDIRECTS: 3
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword}
       REDIS_POOL_MAX_ACTIVE: ${REDIS_POOL_MAX_ACTIVE:-20}
       # 스케줄러 락 설정
       SCHEDULER_LOCK_STRATEGY: cluster

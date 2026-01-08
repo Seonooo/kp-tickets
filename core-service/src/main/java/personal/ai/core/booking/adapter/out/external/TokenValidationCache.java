@@ -26,7 +26,11 @@ import java.util.HexFormat;
  * 
  * 보안:
  * - SHA-256 해시 사용으로 토큰 원문 노출 방지
- * - 해시 충돌 확률 극히 낮음 (2^128 birthday attack)
+ * - 로그에 userId, token 미노출 (PII 보호)
+ * 
+ * 장애 대응:
+ * - 모든 Redis 작업은 예외 처리되어 비즈니스 로직 중단 방지
+ * - Redis 장애 시 캐시 미스/무시로 처리하여 서비스 연속성 보장
  */
 @Slf4j
 @Component
@@ -34,7 +38,7 @@ import java.util.HexFormat;
 public class TokenValidationCache {
 
     private static final String CACHE_KEY_PREFIX = "token:validation:";
-    private static final Duration CACHE_TTL = Duration.ofSeconds(10); // 10초 캐시
+    private static final Duration CACHE_TTL = Duration.ofSeconds(10);
     private static final String VALID_MARKER = "VALID";
 
     private final StringRedisTemplate redisTemplate;
@@ -42,28 +46,25 @@ public class TokenValidationCache {
     /**
      * 캐시에서 검증 결과 조회
      * 
-     * Redis 장애 시 false 반환 (캐시 미스로 처리)
-     * - 캐시는 최적화 목적이므로 장애 시에도 서비스 중단 없음
-     * - Queue Service 검증으로 fallback
-     * 
      * @return 캐시에 있고 유효하면 true, 없거나 오류 시 false
      */
     public boolean isValidInCache(String concertId, Long userId, String token) {
+        if (!validateParams(concertId, userId, token, "lookup")) {
+            return false;
+        }
+
         try {
             String cacheKey = buildCacheKey(concertId, userId, token);
             String cachedValue = redisTemplate.opsForValue().get(cacheKey);
 
             if (VALID_MARKER.equals(cachedValue)) {
-                log.debug("Token validation cache HIT: concertId={}, userId={}", concertId, userId);
+                log.debug("Token cache HIT: concertId={}", concertId);
                 return true;
             }
-
-            log.debug("Token validation cache MISS: concertId={}, userId={}", concertId, userId);
+            log.debug("Token cache MISS: concertId={}", concertId);
             return false;
         } catch (Exception e) {
-            // Redis 장애 시 캐시 미스로 처리 (Queue Service 검증으로 fallback)
-            log.warn("Token validation cache error, treating as MISS: concertId={}, userId={}, error={}",
-                    concertId, userId, e.getMessage());
+            log.warn("Token cache lookup error: concertId={}, error={}", concertId, e.getMessage());
             return false;
         }
     }
@@ -72,49 +73,62 @@ public class TokenValidationCache {
      * 검증 성공 결과를 캐시에 저장
      */
     public void cacheValidation(String concertId, Long userId, String token) {
-        String cacheKey = buildCacheKey(concertId, userId, token);
-        redisTemplate.opsForValue().set(cacheKey, VALID_MARKER, CACHE_TTL);
-        log.debug("Token validation cached: concertId={}, userId={}, ttl={}s",
-                concertId, userId, CACHE_TTL.getSeconds());
+        if (!validateParams(concertId, userId, token, "store")) {
+            return;
+        }
+
+        try {
+            String cacheKey = buildCacheKey(concertId, userId, token);
+            redisTemplate.opsForValue().set(cacheKey, VALID_MARKER, CACHE_TTL);
+            log.debug("Token cached: concertId={}, ttl={}s", concertId, CACHE_TTL.getSeconds());
+        } catch (Exception e) {
+            log.warn("Token cache store error: concertId={}, error={}", concertId, e.getMessage());
+        }
     }
 
     /**
      * 캐시 무효화 (토큰 만료 또는 제거 시)
      */
     public void invalidate(String concertId, Long userId, String token) {
-        String cacheKey = buildCacheKey(concertId, userId, token);
-        redisTemplate.delete(cacheKey);
-        log.debug("Token validation cache invalidated: concertId={}, userId={}", concertId, userId);
+        if (!validateParams(concertId, userId, token, "invalidate")) {
+            return;
+        }
+
+        try {
+            String cacheKey = buildCacheKey(concertId, userId, token);
+            redisTemplate.delete(cacheKey);
+            log.debug("Token cache invalidated: concertId={}", concertId);
+        } catch (Exception e) {
+            log.warn("Token cache invalidate error: concertId={}, error={}", concertId, e.getMessage());
+        }
     }
 
     /**
-     * 캐시 키 생성
-     * 
-     * SHA-256 해시를 사용하여 토큰 충돌 방지
-     * - 16자 hex digest 사용 (64비트, 충돌 확률 극히 낮음)
-     * - 토큰 원문이 키에 노출되지 않음
+     * 파라미터 유효성 검증 (공통)
+     * NOTE: userId, token은 PII이므로 로그에 미포함
      */
+    private boolean validateParams(String concertId, Long userId, String token, String operation) {
+        if (concertId == null || userId == null || token == null) {
+            log.warn("Invalid cache {}: null parameter detected", operation);
+            return false;
+        }
+        return true;
+    }
+
     private String buildCacheKey(String concertId, Long userId, String token) {
-        String tokenHash = hashToken(token);
-        return CACHE_KEY_PREFIX + concertId + ":" + userId + ":" + tokenHash;
+        return CACHE_KEY_PREFIX + concertId + ":" + userId + ":" + hashToken(token);
     }
 
-    /**
-     * SHA-256 해시 생성 (앞 16자 hex)
-     */
     private String hashToken(String token) {
         if (token == null || token.isEmpty()) {
             return "empty";
         }
-
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
-            // 앞 8바이트(16자 hex)만 사용 - 충분한 엔트로피 확보
             return HexFormat.of().formatHex(hash, 0, 8);
         } catch (NoSuchAlgorithmException e) {
-            // SHA-256은 모든 JVM에서 지원됨, 발생 불가
-            log.warn("SHA-256 not available, falling back to simple hash");
+            log.warn("SHA-256 unavailable, using hashCode");
             return String.valueOf(token.hashCode());
         }
     }
