@@ -37,7 +37,7 @@ spring:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
       password: ${SPRING_REDIS_PASSWORD:}
-      timeout: ${SPRING_REDIS_TIMEOUT:10000}  # 10초 타임아웃 (대량 데이터 직렬화 고려)
+      timeout: ${SPRING_REDIS_TIMEOUT:3000}  # 3초 타임아웃 (빠른 실패 감지)
       lettuce:
         pool:
           max-active: ${REDIS_POOL_MAX_ACTIVE:50}   # 메모리 제약: 512MB heap

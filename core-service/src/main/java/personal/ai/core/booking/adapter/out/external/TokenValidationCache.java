@@ -42,19 +42,30 @@ public class TokenValidationCache {
     /**
      * 캐시에서 검증 결과 조회
      * 
-     * @return 캐시에 있고 유효하면 true, 없으면 false
+     * Redis 장애 시 false 반환 (캐시 미스로 처리)
+     * - 캐시는 최적화 목적이므로 장애 시에도 서비스 중단 없음
+     * - Queue Service 검증으로 fallback
+     * 
+     * @return 캐시에 있고 유효하면 true, 없거나 오류 시 false
      */
     public boolean isValidInCache(String concertId, Long userId, String token) {
-        String cacheKey = buildCacheKey(concertId, userId, token);
-        String cachedValue = redisTemplate.opsForValue().get(cacheKey);
+        try {
+            String cacheKey = buildCacheKey(concertId, userId, token);
+            String cachedValue = redisTemplate.opsForValue().get(cacheKey);
 
-        if (VALID_MARKER.equals(cachedValue)) {
-            log.debug("Token validation cache HIT: concertId={}, userId={}", concertId, userId);
-            return true;
+            if (VALID_MARKER.equals(cachedValue)) {
+                log.debug("Token validation cache HIT: concertId={}, userId={}", concertId, userId);
+                return true;
+            }
+
+            log.debug("Token validation cache MISS: concertId={}, userId={}", concertId, userId);
+            return false;
+        } catch (Exception e) {
+            // Redis 장애 시 캐시 미스로 처리 (Queue Service 검증으로 fallback)
+            log.warn("Token validation cache error, treating as MISS: concertId={}, userId={}, error={}",
+                    concertId, userId, e.getMessage());
+            return false;
         }
-
-        log.debug("Token validation cache MISS: concertId={}, userId={}", concertId, userId);
-        return false;
     }
 
     /**

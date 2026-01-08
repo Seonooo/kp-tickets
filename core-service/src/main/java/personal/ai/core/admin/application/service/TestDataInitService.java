@@ -129,37 +129,37 @@ public class TestDataInitService {
 
     /**
      * 특정 등급의 좌석 생성
+     * 
+     * MySQL 8.0 ROW_NUMBER() 윈도우 함수 사용
+     * - @row 사용자 변수 대신 표준 SQL 사용으로 커넥션 풀 세션 독립성 보장
+     * - jdbcTemplate.update() 반환값(실제 삽입된 행 수) 사용
      */
     private int createSeatsByGrade(String grade, int count, String price) {
-        String sql = "INSERT INTO seats (schedule_id, seat_number, grade, price, status) " +
-                "SELECT " +
-                "  1, " +
-                "  CONCAT(?, '-', LPAD(seq, 4, '0')), " +
-                "  ?, " +
-                "  ?, " +
-                "  'AVAILABLE' " +
-                "FROM (" +
-                "  SELECT @row := @row + 1 as seq " +
-                "  FROM " +
-                "    (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 " +
-                "     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t1, "
-                +
-                "    (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 " +
-                "     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t2, "
-                +
-                "    (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 " +
-                "     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t3, "
-                +
-                "    (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 " +
-                "     UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t4, "
-                +
-                "    (SELECT @row := 0) r " +
-                "  LIMIT ? " +
-                ") as numbers";
+        String sql = """
+                INSERT INTO seats (schedule_id, seat_number, grade, price, status)
+                SELECT
+                    1,
+                    CONCAT(?, '-', LPAD(ROW_NUMBER() OVER (), 4, '0')),
+                    ?,
+                    ?,
+                    'AVAILABLE'
+                FROM (
+                    SELECT 1 FROM
+                        (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+                         UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t1,
+                        (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+                         UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t2,
+                        (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+                         UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t3,
+                        (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+                         UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) t4
+                    LIMIT ?
+                ) as numbers
+                """;
 
-        jdbcTemplate.update(sql, grade, grade, price, count);
+        int insertedRows = jdbcTemplate.update(sql, grade, grade, price, count);
 
-        log.debug("Created {} {} seats (price: {})", count, grade, price);
-        return count;
+        log.debug("Created {} {} seats (price: {})", insertedRows, grade, price);
+        return insertedRows;
     }
 }

@@ -2,6 +2,7 @@ package personal.ai.core.booking.application.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import personal.ai.core.booking.adapter.in.web.dto.SeatResponse;
@@ -17,6 +18,10 @@ import java.util.List;
  * (Self-invocation 문제 해결)
  *
  * 최적화: Response DTO를 직접 캐싱하여 직렬화/역직렬화 오버헤드 최소화
+ * 
+ * 캐시 전략:
+ * - 조회: @Cacheable로 1초 TTL 캐싱
+ * - 무효화: 좌석 예약 시 @CacheEvict로 즉시 무효화
  */
 @Slf4j
 @Service
@@ -53,5 +58,18 @@ public class SeatQueryCacheService {
                 scheduleId, seats.size(), dbQueryTime, mappingTime);
 
         return response;
+    }
+
+    /**
+     * 좌석 예약 시 캐시 무효화
+     * 
+     * 좌석 예약이 완료되면 해당 스케줄의 availableSeats 캐시를 즉시 삭제
+     * → 다음 조회 시 DB에서 최신 데이터 로드
+     * 
+     * @param scheduleId 예약된 좌석의 스케줄 ID
+     */
+    @CacheEvict(value = "availableSeats", key = "#scheduleId")
+    public void evictAvailableSeatsCache(Long scheduleId) {
+        log.debug("Evicting availableSeats cache for scheduleId={}", scheduleId);
     }
 }

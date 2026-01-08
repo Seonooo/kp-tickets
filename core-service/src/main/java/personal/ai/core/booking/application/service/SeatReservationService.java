@@ -18,6 +18,10 @@ import personal.ai.core.booking.domain.service.QueueTokenExtractor;
 /**
  * Seat Reservation Service (SRP)
  * 단일 책임: 좌석 예약 처리
+ * 
+ * 캐시 정합성:
+ * - 좌석 예약 성공 시 availableSeats 캐시를 즉시 무효화
+ * - 다음 조회 시 DB에서 최신 데이터 로드
  */
 @Slf4j
 @Service
@@ -30,6 +34,7 @@ public class SeatReservationService implements ReserveSeatUseCase {
     private final ReservationCacheRepository reservationCacheRepository;
     private final QueueServiceClient queueServiceClient;
     private final BookingManager bookingManager;
+    private final SeatQueryCacheService seatQueryCacheService;
 
     @Override
     public Reservation reserveSeat(ReserveSeatCommand command) {
@@ -47,7 +52,11 @@ public class SeatReservationService implements ReserveSeatUseCase {
             var saved = bookingManager.reserveSeatInTransaction(command);
             reservationCacheRepository.setReservationTTL(saved.id(), saved.expiresAt());
 
-            log.debug("Seat reserved: reservationId={}, seatId={}", saved.id(), command.seatId());
+            // 캐시 무효화: 예약 성공 후 해당 스케줄의 좌석 캐시 삭제
+            seatQueryCacheService.evictAvailableSeatsCache(command.scheduleId());
+
+            log.debug("Seat reserved: reservationId={}, seatId={}, scheduleId={}",
+                    saved.id(), command.seatId(), command.scheduleId());
             return saved;
 
         } catch (DataIntegrityViolationException e) {
