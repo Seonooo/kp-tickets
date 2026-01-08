@@ -14,11 +14,12 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:password}
     driver-class-name: ${SPRING_DATASOURCE_DRIVER:com.mysql.cj.jdbc.Driver}
     hikari:
-      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
-      minimum-idle: ${DB_POOL_MIN_IDLE:5}
-      connection-timeout: ${DB_CONNECTION_TIMEOUT:30000}
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:50}   # 메모리 제약: 512MB heap
+      minimum-idle: ${DB_POOL_MIN_IDLE:10}        # 최소 유휴 커넥션
+      connection-timeout: ${DB_CONNECTION_TIMEOUT:3000}  # 3초 (빠른 실패)
       idle-timeout: ${DB_IDLE_TIMEOUT:600000}
       max-lifetime: ${DB_MAX_LIFETIME:1800000}
+      leak-detection-threshold: ${DB_LEAK_DETECTION:30000}  # 30초 이상 홀딩 시 경고
 
   jpa:
     hibernate:
@@ -32,17 +33,28 @@ spring:
 
   data:
     redis:
+      # 단일 Redis 모드
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
       password: ${SPRING_REDIS_PASSWORD:}
-      timeout: ${SPRING_REDIS_TIMEOUT:3000}  # 3초 타임아웃
+      timeout: ${SPRING_REDIS_TIMEOUT:3000}  # 3초 타임아웃 (빠른 실패 감지)
       lettuce:
         pool:
-          max-active: ${REDIS_POOL_MAX_ACTIVE:50}  # 대규모 트래픽 대응 (8 -> 50)
-          max-idle: ${REDIS_POOL_MAX_IDLE:20}      # (8 -> 20)
-          min-idle: ${REDIS_POOL_MIN_IDLE:10}      # (2 -> 10)
-          max-wait: ${REDIS_POOL_MAX_WAIT:3000}    # 연결 대기 시간 3초
+          max-active: ${REDIS_POOL_MAX_ACTIVE:50}   # 메모리 제약: 512MB heap
+          max-idle: ${REDIS_POOL_MAX_IDLE:25}       # 최대 유휴 커넥션
+          min-idle: ${REDIS_POOL_MIN_IDLE:10}       # 최소 유휴 커넥션
+          max-wait: ${REDIS_POOL_MAX_WAIT:500}      # 연결 대기 시간 500ms (빠른 실패)
         shutdown-timeout: ${REDIS_SHUTDOWN_TIMEOUT:3000}
+
+  # Spring Cache 설정 (Record 타입 지원)
+  # RecordSupportingTypeResolver로 record의 타입 정보(@class) 강제 추가
+  # 참고: https://techblog.woowahan.com/22767/
+  cache:
+    type: redis
+    redis:
+      time-to-live: ${CACHE_TTL:1000}  # 1초 TTL (티켓팅 실시간성 보장)
+      cache-null-values: false  # null 값은 캐싱하지 않음
+      key-prefix: "core:"  # 캐시 키 prefix
 
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -62,7 +74,7 @@ external:
   queue-service:
     base-url: ${QUEUE_SERVICE_URL:http://localhost:8081}
     connect-timeout-ms: ${QUEUE_SERVICE_CONNECT_TIMEOUT:200}  # TCP 연결 타임아웃 (빠른 실패)
-    read-timeout-ms: ${QUEUE_SERVICE_READ_TIMEOUT:1000}       # HTTP 응답 타임아웃 (Circuit Breaker Slow Call 기준)
+    read-timeout-ms: ${QUEUE_SERVICE_READ_TIMEOUT:2000}       # HTTP 응답 타임아웃 (1s → 2s, Connection Pool 최적화로 여유 확보)
 
 # Resilience4j 설정 (Circuit Breaker, Bulkhead, Retry)
 resilience4j:
@@ -74,8 +86,9 @@ resilience4j:
         slidingWindowSize: 5
         minimumNumberOfCalls: 100
         failureRateThreshold: 50
-        # Slow Call: 1초 이상 느려지는 요청을 실패로 간주 (핵심!)
-        slowCallDurationThreshold: 1000ms
+        # Slow Call: RestClient read timeout (2초)에 맞춰 설정
+        # Connection Pool 최적화로 대부분 요청은 10ms 이내 처리
+        slowCallDurationThreshold: 2000ms
         slowCallRateThreshold: 50
         # Wait Duration: 사용자 재시도 간격(3~7초) 고려한 5초
         waitDurationInOpenState: 5000ms
@@ -91,9 +104,12 @@ resilience4j:
   bulkhead:
     instances:
       queueService:
-        # Queue 호출은 최대 100개로 제한 (내부 자원 보호)
+        # Queue Service 응답 시간 측정 결과 (P95: 2.65ms at 100 req/sec)
+        # Little's Law 계산: 100 req/sec × 0.003s = 0.3개 (이론적 최소값)
+        # 실제 설정: 100 (버스트 트래픽, 순간적 지연 대응을 위한 충분한 여유 확보)
+        # 이유: P99 레이턴시 스파이크(100ms+) 발생 시에도 요청 거부 없이 처리
         maxConcurrentCalls: 100
-        maxWaitDuration: 0ms  # 대기 없이 즉시 거부
+        maxWaitDuration: 100ms  # 일시적 버스트 트래픽 흡수
 
   retry:
     instances:
@@ -115,6 +131,16 @@ server:
   port: ${SERVER_PORT:8080}
   http2:
     enabled: true
+  # Response Compression (비활성화 - CPU 오버헤드로 인한 성능 악화)
+  compression:
+    enabled: false
+    min-response-size: 1024  # 1KB 이상만 압축
+    mime-types:
+      - application/json
+      - application/xml
+      - text/html
+      - text/xml
+      - text/plain
 
 management:
   endpoints:

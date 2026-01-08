@@ -30,7 +30,7 @@ local ttl = tonumber(ARGV[5])
 local poppedUsers = redis.call('ZPOPMIN', waitQueueKey, batchSize)
 
 if #poppedUsers == 0 then
-    return cjson.encode({})  -- 빈 배열 반환
+    return "[]"  -- 빈 배열 반환 (JSON 문자열)
 end
 
 -- 2. 성공한 유저 ID 목록
@@ -50,8 +50,8 @@ for i = 1, #poppedUsers, 2 do
         -- Active Queue (ZSet)에 추가
         redis.call('ZADD', activeQueueKey, expiredAt, userId)
 
-        -- Token Hash 생성
-        local tokenKey = tokenPrefix .. concertId .. ':' .. userId
+        -- Token Hash 생성 (Hash Tag 형식: active:token:{concertId}:userId)
+        local tokenKey = tokenPrefix .. '{' .. concertId .. '}:' .. userId
         redis.call('HSET', tokenKey,
             'token', token,
             'status', 'READY',
@@ -73,4 +73,7 @@ for i = 1, #poppedUsers, 2 do
 end
 
 -- 4. 성공한 유저 ID 목록 반환 (JSON 배열)
+if #movedUserIds == 0 then
+    return "[]"  -- 빈 배열 (모든 유저가 롤백된 경우)
+end
 return cjson.encode(movedUserIds)

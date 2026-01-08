@@ -1,0 +1,304 @@
+# Scale Out 테스트 환경 (간단한 방식 - Nginx 없이)
+#
+# 사용법:
+#   1개 인스턴스: docker-compose -f docker-compose.simple-scale.yml up
+#   2개 인스턴스: docker-compose -f docker-compose.simple-scale.yml up --scale queue-service=2
+#   4개 인스턴스: docker-compose -f docker-compose.simple-scale.yml up --scale queue-service=4
+#
+# 주의사항:
+#   - container_name이 없어야 스케일링 가능
+#   - 외부 포트 매핑 제거 (Docker 네트워크 내부에서만 통신)
+#   - K6는 Docker 네트워크 내부에서 실행되어 queue-service:8081로 접근
+
+version: '3.8'
+
+services:
+  # 1. Database Service (MySQL) - 단일 인스턴스 유지
+  db:
+    image: mysql:8.0.36
+    container_name: concert-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --transaction-isolation=READ-COMMITTED
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - concert-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # 2. Cache & Queue Service (Redis) - 단일 인스턴스 유지
+  cache:
+    image: redis:7.2-alpine
+    container_name: concert-cache
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - cache_data:/data
+    networks:
+      - concert-network
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=${REDIS_PASSWORD} redis-cli ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 3. Redis Exporter (Redis 메트릭 수집)
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.55.0-alpine
+    container_name: concert-redis-exporter
+    restart: unless-stopped
+    ports:
+      - "9121:9121"
+    environment:
+      REDIS_ADDR: "cache:6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      cache:
+        condition: service_healthy
+    networks:
+      - concert-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 4. Message Broker Service (Kafka) - 단일 인스턴스 유지
+  broker:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: concert-broker
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    volumes:
+      - broker_data:/var/lib/kafka/data
+    networks:
+      - concert-network
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # 5. Core Service (User + Booking + Payment) - 단일 인스턴스
+  core-service:
+    build:
+      context: .
+      dockerfile: core-service/Dockerfile
+    container_name: concert-core-service
+    restart: unless-stopped
+    ports:
+      - "8080:8080"  # 외부 접근용
+    environment:
+      # JVM Options
+      JAVA_TOOL_OPTIONS: "-Xms512m -Xmx512m"
+
+      # Spring Profile
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+
+      # Database
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+
+      # Redis
+      SPRING_REDIS_HOST: cache
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+      # Kafka
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: broker:9092
+
+      # Queue Service URL
+      QUEUE_SERVICE_URL: http://queue-service:8081
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
+    networks:
+      - concert-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # 6. Queue Service (대기열 전용) - 스케일 아웃 대상 ⭐
+  # ⚠️ container_name 없음 → Docker가 자동으로 queue-service-1, queue-service-2, ... 생성
+  queue-service:
+    build:
+      context: .
+      dockerfile: queue-service/Dockerfile
+    restart: unless-stopped
+    # 내부 네트워크에서만 접근 (8081 포트)
+    expose:
+      - "8081"
+    environment:
+      # JVM Options - Heap 2GB + ZGC (GC 과부하 해소)
+      JAVA_TOOL_OPTIONS: "-Xms1g -Xmx2g -XX:+UseZGC -XX:+ZGenerational"
+
+      # Spring Profile
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+
+      # Redis
+      SPRING_REDIS_HOST: cache
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_POOL_MAX_ACTIVE: ${REDIS_POOL_MAX_ACTIVE:-20}
+
+      # Kafka
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: broker:9092
+    depends_on:
+      cache:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
+    networks:
+      - concert-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 3G
+
+  # 7. Prometheus (메트릭 수집) - 다중 인스턴스 모니터링
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: concert-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus-scale.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=14d'  # 2주로 증가
+    networks:
+      - concert-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 8. Grafana (메트릭 시각화)
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: concert-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+      - ./monitoring/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./monitoring/grafana-dashboard-overview.json:/etc/grafana/provisioning/dashboards/overview-dashboard.json
+      - ./monitoring/grafana-dashboard-application.json:/etc/grafana/provisioning/dashboards/application-dashboard.json
+      - ./monitoring/grafana-dashboard-redis.json:/etc/grafana/provisioning/dashboards/redis-dashboard.json
+    depends_on:
+      - prometheus
+    networks:
+      - concert-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 9. K6 Load Testing (부하 테스트)
+  k6:
+    image: grafana/k6:latest
+    container_name: concert-k6
+    volumes:
+      - ./k6-tests:/scripts
+    networks:
+      - concert-network
+    environment:
+      - K6_OUT=json=/scripts/results/result.json
+    profiles:
+      - testing
+
+networks:
+  concert-network:
+    driver: bridge
+
+volumes:
+  db_data:
+  cache_data:
+  broker_data:
+  prometheus_data:
+  grafana_data:

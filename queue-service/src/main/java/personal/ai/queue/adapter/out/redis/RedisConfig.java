@@ -9,6 +9,8 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 /**
  * Redis Configuration
  * String Key, String Value 기반 RedisTemplate 설정
+ *
+ * Queue Redis: Active Queue + Waiting Queue (통합)
  */
 @Configuration
 public class RedisConfig {
@@ -71,5 +73,16 @@ public class RedisConfig {
         org.springframework.core.io.ClassPathResource scriptSource = new org.springframework.core.io.ClassPathResource(
                 "scripts/activate_token.lua");
         return org.springframework.data.redis.core.script.RedisScript.of(scriptSource, Long.class);
+    }
+
+    /**
+     * Phase 3-2 최적화: enter_queue.lua 스크립트
+     * 6회 Redis 호출을 1회로 통합 (예상 TPS +30~50%)
+     */
+    @Bean
+    public org.springframework.data.redis.core.script.RedisScript<String> enterQueueScript() {
+        org.springframework.core.io.ClassPathResource scriptSource = new org.springframework.core.io.ClassPathResource(
+                "scripts/enter_queue.lua");
+        return org.springframework.data.redis.core.script.RedisScript.of(scriptSource, String.class);
     }
 }

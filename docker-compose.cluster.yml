@@ -1,0 +1,408 @@
+# Redis Cluster + Scale Out 테스트 환경
+#
+# Redis Cluster 특징:
+#   - 3 Master + 3 Replica = 6 노드
+#   - 자동 Failover
+#   - 콘서트별 Hash Tag로 데이터 분산
+#
+# 사용법:
+#   1. Cluster 초기화: docker-compose -f docker-compose.cluster.yml up -d
+#   2. 스케일 테스트: docker-compose -f docker-compose.cluster.yml up --scale queue-service=4
+#   3. K6 테스트: docker-compose -f docker-compose.cluster.yml run k6 run /scripts/queue-entry-scale-test.js
+
+# NOTE: 'version' key is obsolete in Docker Compose V2
+
+services:
+  # ============================================
+  # Redis Cluster (3 Master + 3 Replica)
+  # ============================================
+  
+  redis-node-1:
+    image: redis:7.2-alpine
+    container_name: redis-node-1
+    command: >
+      redis-server 
+      --port 6379
+      --requirepass ${REDIS_PASSWORD:-redispassword}
+      --masterauth ${REDIS_PASSWORD:-redispassword}
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_node_1_data:/data
+    networks:
+      - concert-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis-node-2:
+    image: redis:7.2-alpine
+    container_name: redis-node-2
+    command: >
+      redis-server 
+      --port 6379
+      --requirepass ${REDIS_PASSWORD:-redispassword}
+      --masterauth ${REDIS_PASSWORD:-redispassword}
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_node_2_data:/data
+    networks:
+      - concert-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis-node-3:
+    image: redis:7.2-alpine
+    container_name: redis-node-3
+    command: >
+      redis-server 
+      --port 6379
+      --requirepass ${REDIS_PASSWORD:-redispassword}
+      --masterauth ${REDIS_PASSWORD:-redispassword}
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_node_3_data:/data
+    networks:
+      - concert-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis-node-4:
+    image: redis:7.2-alpine
+    container_name: redis-node-4
+    command: >
+      redis-server 
+      --port 6379
+      --requirepass ${REDIS_PASSWORD:-redispassword}
+      --masterauth ${REDIS_PASSWORD:-redispassword}
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_node_4_data:/data
+    networks:
+      - concert-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis-node-5:
+    image: redis:7.2-alpine
+    container_name: redis-node-5
+    command: >
+      redis-server 
+      --port 6379
+      --requirepass ${REDIS_PASSWORD:-redispassword}
+      --masterauth ${REDIS_PASSWORD:-redispassword}
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_node_5_data:/data
+    networks:
+      - concert-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis-node-6:
+    image: redis:7.2-alpine
+    container_name: redis-node-6
+    command: >
+      redis-server 
+      --port 6379
+      --requirepass ${REDIS_PASSWORD:-redispassword}
+      --masterauth ${REDIS_PASSWORD:-redispassword}
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_node_6_data:/data
+    networks:
+      - concert-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Redis Cluster 초기화 (한 번만 실행)
+  redis-cluster-init:
+    image: redis:7.2-alpine
+    container_name: redis-cluster-init
+    depends_on:
+      redis-node-1:
+        condition: service_healthy
+      redis-node-2:
+        condition: service_healthy
+      redis-node-3:
+        condition: service_healthy
+      redis-node-4:
+        condition: service_healthy
+      redis-node-5:
+        condition: service_healthy
+      redis-node-6:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo 'Waiting for Redis nodes...'
+        sleep 5
+        echo 'Creating Redis Cluster...'
+        redis-cli -a ${REDIS_PASSWORD:-redispassword} --cluster create redis-node-1:6379 redis-node-2:6379 redis-node-3:6379 redis-node-4:6379 redis-node-5:6379 redis-node-6:6379 --cluster-replicas 1 --cluster-yes
+        echo 'Redis Cluster created successfully!'
+    networks:
+      - concert-network
+    restart: "no"
+
+  # ============================================
+  # Database (MySQL)
+  # ============================================
+  db:
+    image: mysql:8.0.36
+    container_name: concert-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --transaction-isolation=READ-COMMITTED
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - concert-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ============================================
+  # Kafka
+  # ============================================
+  broker:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: concert-broker
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    volumes:
+      - broker_data:/var/lib/kafka/data
+    networks:
+      - concert-network
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ============================================
+  # Core Service
+  # ============================================
+  core-service:
+    build:
+      context: .
+      dockerfile: core-service/Dockerfile
+    container_name: concert-core-service
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms512m -Xmx512m"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+      # Redis Cluster 설정
+      SPRING_DATA_REDIS_CLUSTER_NODES: redis-node-1:6379,redis-node-2:6379,redis-node-3:6379
+      SPRING_DATA_REDIS_CLUSTER_MAX_REDIRECTS: 3
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: broker:9092
+      QUEUE_SERVICE_URL: http://queue-service:8081
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cluster-init:
+        condition: service_completed_successfully
+      broker:
+        condition: service_healthy
+    networks:
+      - concert-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ============================================
+  # Queue Service (Scale Out 대상)
+  # ============================================
+  queue-service:
+    build:
+      context: .
+      dockerfile: queue-service/Dockerfile
+    restart: unless-stopped
+    # NOTE: ports 제거 - 스케일링 시 포트 충돌 방지
+    # E2E 테스트는 Docker 네트워크 내부에서 진행하거나 별도 LB 사용
+    expose:
+      - "8081"
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms1g -Xmx2g -XX:+UseZGC -XX:+ZGenerational"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      # Redis Cluster 설정
+      SPRING_DATA_REDIS_CLUSTER_NODES: redis-node-1:6379,redis-node-2:6379,redis-node-3:6379
+      SPRING_DATA_REDIS_CLUSTER_MAX_REDIRECTS: 3
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword}
+      REDIS_POOL_MAX_ACTIVE: ${REDIS_POOL_MAX_ACTIVE:-20}
+      # 스케줄러 락 설정
+      SCHEDULER_LOCK_STRATEGY: cluster
+      SCHEDULER_LOCK_TTL: 30
+      # Kafka
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: broker:9092
+    depends_on:
+      redis-cluster-init:
+        condition: service_completed_successfully
+      broker:
+        condition: service_healthy
+    networks:
+      - concert-network
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 3G
+
+  # ============================================
+  # Monitoring
+  # ============================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: concert-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus-scale.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=14d'
+    networks:
+      - concert-network
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: concert-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+      - ./monitoring/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./monitoring/grafana-dashboard-overview.json:/etc/grafana/provisioning/dashboards/overview-dashboard.json
+      - ./monitoring/grafana-dashboard-application.json:/etc/grafana/provisioning/dashboards/application-dashboard.json
+      - ./monitoring/grafana-dashboard-redis.json:/etc/grafana/provisioning/dashboards/redis-dashboard.json
+    depends_on:
+      - prometheus
+    networks:
+      - concert-network
+
+  # ============================================
+  # K6 Load Testing
+  # ============================================
+  k6:
+    image: grafana/k6:latest
+    container_name: concert-k6
+    volumes:
+      - ./k6-tests:/scripts
+    networks:
+      - concert-network
+    environment:
+      - K6_OUT=json=/scripts/results/result.json
+    profiles:
+      - testing
+
+networks:
+  concert-network:
+    driver: bridge
+
+volumes:
+  db_data:
+  redis_node_1_data:
+  redis_node_2_data:
+  redis_node_3_data:
+  redis_node_4_data:
+  redis_node_5_data:
+  redis_node_6_data:
+  broker_data:
+  prometheus_data:
+  grafana_data:

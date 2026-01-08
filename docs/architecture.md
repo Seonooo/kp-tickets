@@ -46,47 +46,47 @@
 
 | 구분 | Redis Key | 자료구조 | 역할 및 특징 |
 |:---:|:---|:---:|:---|
-| **Wait Queue** | `queue:wait` | **ZSet** | **순서 보장 대기열**<br>- Member: `userId`<br>- Score: `Timestamp` (진입 시간) |
-| **Active Queue** | `queue:active` | **ZSet** | **입장 인원(Capacity) 관리 & 청소**<br>- Member: `userId`<br>- Score: `Expire Timestamp` (만료 예정 시간) |
-| **Active Token** | `active:token:{userId}` | **Hash** | **O(1) 검증 & 메타 데이터 관리**<br>- Field `token`: 검증용 UUID<br>- Field `status`: "ACTIVE"<br>- Field `extend_count`: **연장 횟수 (Integer)**<br>- TTL: Redis Native Expire (5분/10분) |
+| **Wait Queue** | `queue:wait:{concertId}` | **ZSet** | **콘서트별 대기열 (순서 보장)**<br>- Member: `userId`<br>- Score: `Timestamp` (진입 시간)<br>- 콘서트별 분리로 성능 및 동시성 향상 |
+| **Active Queue** | `queue:active:{concertId}` | **ZSet** | **콘서트별 입장 인원 관리 & 청소**<br>- Member: `userId`<br>- Score: `Expire Timestamp` (만료 예정 시간)<br>- 콘서트별 독립적 용량 제어 |
+| **Active Token** | `active:token:{concertId}:{userId}` | **Hash** | **O(1) 검증 & 메타 데이터 관리**<br>- Field `token`: 검증용 UUID<br>- Field `status`: "ACTIVE"<br>- Field `extend_count`: **연장 횟수 (Integer)**<br>- TTL: Redis Native Expire (5분/10분) |
 
 ### 3.2 Workflow & Algorithms
 
 ![img.png](img.png)
 
 #### A. 인입 (Ingestion)
-1. 유저 요청 시 `queue:wait` (ZSet)에 적재 (`ZADD`).
-2. 대기 순번 리턴 (`ZRANK`).
+1. 유저 요청 시 `queue:wait:{concertId}` (ZSet)에 적재 (`ZADD`).
+2. 해당 콘서트의 대기 순번 리턴 (`ZRANK`).
 3. **Active Queue나 Token은 생성하지 않음.**
 
 #### B. 전환 (Move Scheduling)
 스케줄러(Worker)가 주기적으로 실행되어 유저를 Wait -> Active로 이동시킨다.
 - **Lua Script 사용 필수:**
-    1. `queue:active` 여유분 확인.
-    2. `queue:wait`에서 Pop.
-    3. `queue:active`에 `Score = 현재시간 + 5분`으로 `ZADD` (진입 대기 상태).
-    4. `active:token:{userId}` Hash 생성 및 **TTL 5분** 설정.
+    1. `queue:active:{concertId}` 여유분 확인.
+    2. `queue:wait:{concertId}`에서 Pop.
+    3. `queue:active:{concertId}`에 `Score = 현재시간 + 5분`으로 `ZADD` (진입 대기 상태).
+    4. `active:token:{concertId}:{userId}` Hash 생성 및 **TTL 5분** 설정.
 
 #### C. 검증 및 연장 (Validation & Extension)
 - **C-1. 최초 진입 (Page Access):**
     - 유저가 예매 페이지 진입(`GET /api/v1/bookings`) 시 토큰을 검증한다.
     - 유효하다면 즉시 **TTL을 10분으로 초기화**한다.
-        - `EXPIRE active:token:{userId} 600`
-        - `ZADD queue:active {현재시간 + 600} {userId}`
+        - `EXPIRE active:token:{concertId}:{userId} 600`
+        - `ZADD queue:active:{concertId} {현재시간 + 600} {userId}`
 
 - **C-2. 명시적 연장 (User Action):**
     - 유저가 '시간 연장' 버튼 클릭 시 (`POST /api/v1/queue/extension`):
-    1. `HGET active:token:{userId} extend_count` 조회.
+    1. `HGET active:token:{concertId}:{userId} extend_count` 조회.
     2. 값이 2 이상이면 에러 반환.
     3. 2 미만이면:
-        - **`HINCRBY active:token:{userId} extend_count 1`**.
-        - **`EXPIRE active:token:{userId} 600`** (다시 10분 세팅).
-        - **`ZADD queue:active {현재시간 + 600} {userId}`** (청소 타겟 갱신).
+        - **`HINCRBY active:token:{concertId}:{userId} extend_count 1`**.
+        - **`EXPIRE active:token:{concertId}:{userId} 600`** (다시 10분 세팅).
+        - **`ZADD queue:active:{concertId} {현재시간 + 600} {userId}`** (청소 타겟 갱신).
 
 #### D. 청소 (Cleanup Scheduling)
 - **주기:** 1초 (Virtual Thread 활용).
-- **로직:** `queue:active` 전체를 스캔(`ZSCAN`)하지 않는다.
-- **명령어:** **`ZREMRANGEBYSCORE queue:active -inf {현재시간}`**
+- **로직:** `queue:active:{concertId}` 전체를 스캔(`ZSCAN`)하지 않는다.
+- **명령어:** **`ZREMRANGEBYSCORE queue:active:{concertId} -inf {현재시간}`**
     - 만료 시간이 지난 유저만 O(log N)으로 효율적으로 삭제하여 대기열 슬롯을 확보한다.
 
 ---
@@ -146,8 +146,8 @@
 | **Window Size** | **5초** | 최근 5초간의 트래픽을 표본으로 삼음 |
 | **Min Calls** | **100회** | 최소 100건 이상의 요청이 있을 때만 판단 (통계적 유의미성) |
 | **Failure Rate** | **50%** | 에러(5xx)가 절반 이상이면 차단 |
-| **Slow Call** | **1000ms (1s)** | 1초 넘으면 느린 것으로 간주 (핵심!) |
-| **Slow Rate** | **50%** | 1초 이상 지연이 절반을 넘으면 차단 |
+| **Slow Call** | **2000ms (2s)** | 2초 넘으면 느린 것으로 간주 (핵심!) |
+| **Slow Rate** | **50%** | 2초 이상 지연이 절반을 넘으면 차단 |
 | **Wait Duration** | **5초** | 사용자 재시도 간격(3~7초) 고려한 현실적 타협점 |
 | **Half-Open** | **10회 허용** | 복구 여부 판단을 위해 10개의 요청을 흘려봄 |
 | **Record Exceptions** | `HttpServerErrorException`, `ResourceAccessException` | 5xx, 네트워크 에러만 실패 카운트 |

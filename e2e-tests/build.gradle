@@ -1,0 +1,84 @@
+plugins {
+    id 'java'
+}
+
+group = 'personal.ai'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    // root build.gradle의 subprojects에서 자동 추가되는 spring-boot-starter-test 제외
+    testImplementation.exclude group: 'org.springframework.boot', module: 'spring-boot-starter-test'
+}
+
+dependencies {
+    // Cucumber BDD
+    testImplementation 'io.cucumber:cucumber-java:7.18.0'
+    testImplementation 'io.cucumber:cucumber-junit-platform-engine:7.18.0'
+    testImplementation 'io.cucumber:cucumber-picocontainer:7.18.0'  // 의존성 주입 지원
+
+    // JUnit 5
+    testImplementation 'org.junit.platform:junit-platform-suite:1.10.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+
+    // REST Assured (API 테스트)
+    testImplementation 'io.rest-assured:rest-assured:5.4.0'
+    testImplementation 'io.rest-assured:json-path:5.4.0'
+    testImplementation 'io.rest-assured:json-schema-validator:5.4.0'
+
+    // Jackson (JSON 처리)
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    testCompileOnly 'org.projectlombok:lombok:1.18.30'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
+
+    // AssertJ (Fluent assertions)
+    testImplementation 'org.assertj:assertj-core:3.25.3'
+
+    // Awaitility (비동기 검증)
+    testImplementation 'org.awaitility:awaitility:4.2.0'
+
+    // SLF4J (로깅)
+    testImplementation 'org.slf4j:slf4j-api:2.0.12'
+    testRuntimeOnly 'ch.qos.logback:logback-classic:1.5.3'
+}
+
+test {
+    useJUnitPlatform()
+
+    // Test execution configuration
+    maxParallelForks = 1
+
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+        showStandardStreams = true
+    }
+
+    // Cucumber 리포트 디렉토리
+    systemProperty 'cucumber.plugin', 'pretty,html:build/reports/cucumber/cucumber.html,json:build/reports/cucumber/cucumber.json'
+}
+
+// Cucumber 테스트만 실행하는 태스크
+task cucumberTest(type: Test) {
+    useJUnitPlatform()
+    include '**/CucumberTestRunner.class'
+
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+        showStandardStreams = true
+    }
+}

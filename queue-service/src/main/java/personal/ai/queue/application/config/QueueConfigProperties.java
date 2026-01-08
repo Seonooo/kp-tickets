@@ -10,7 +10,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record QueueConfigProperties(
         Active active,
         Scheduler scheduler,
-        Polling polling
+        Polling polling,
+        Cache cache
 ) {
     public record Active(
             int maxSize,
@@ -30,5 +31,13 @@ public record QueueConfigProperties(
             int rateLimitCapacity,
             double rateLimitRefillRate,  // Token Bucket: 초당 리필 토큰 수
             int executorPoolSize
+    ) {}
+
+    /**
+     * Quick Win 최적화: 캐싱 설정
+     * totalWaiting 캐싱으로 ZCARD 호출 빈도 감소
+     */
+    public record Cache(
+            int totalWaitingTtlSeconds  // totalWaiting 캐시 TTL (초)
     ) {}
 }

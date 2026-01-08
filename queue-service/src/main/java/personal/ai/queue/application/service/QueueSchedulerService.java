@@ -1,5 +1,7 @@
 package personal.ai.queue.application.service;
 
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,7 @@ public class QueueSchedulerService implements
     private final QueueRepository queueRepository;
     private final QueueDomainService domainService;
     private final QueueConfig queueConfig;
+    private final MeterRegistry meterRegistry;
 
     @Override
     public int moveWaitingToActive(String concertId) {
@@ -33,6 +36,21 @@ public class QueueSchedulerService implements
 
         // 현재 Active Queue 크기 확인
         Long currentActiveSize = queueRepository.getActiveQueueSize(concertId);
+
+        // 현재 Wait Queue 크기 확인
+        Long currentWaitSize = queueRepository.getWaitQueueSize(concertId);
+
+        // Gauge로 Active Queue 크기 기록
+        Gauge.builder("queue.active.size", currentActiveSize, Long::doubleValue)
+                .tag("concert_id", concertId)
+                .description("Current size of active queue")
+                .register(meterRegistry);
+
+        // Gauge로 Wait Queue 크기 기록
+        Gauge.builder("queue.wait.size", currentWaitSize, Long::doubleValue)
+                .tag("concert_id", concertId)
+                .description("Number of users waiting in wait queue")
+                .register(meterRegistry);
 
         // 전환 가능한 인원 계산
         int availableSlots = domainService.calculateBatchSize(currentActiveSize);

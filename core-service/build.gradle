@@ -11,6 +11,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.micrometer:micrometer-registry-prometheus'
 
+    // Java HttpClient (JDK 내장, Virtual Thread 최적화)
+    // No external dependency needed - uses java.net.http.HttpClient
+
     // Database
     runtimeOnly 'com.mysql:mysql-connector-j'
 

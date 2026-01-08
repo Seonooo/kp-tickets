@@ -1,0 +1,64 @@
+# Prometheus 설정 - Scale Out 테스트용
+# 다중 Queue Service 인스턴스 모니터링
+
+global:
+  scrape_interval: 15s      # 15초 간격으로 메트릭 수집
+  evaluation_interval: 15s  # 15초 간격으로 규칙 평가
+  external_labels:
+    cluster: 'concert-booking'
+    env: 'scale-test'
+
+# 메트릭 수집 대상
+scrape_configs:
+  # Core Service (단일 인스턴스)
+  - job_name: 'core-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['core-service:8080']
+        labels:
+          service: 'core-service'
+          instance: 'core-1'
+
+  # Queue Service (다중 인스턴스) ⭐
+  # Docker Compose scale 명령어로 생성된 모든 인스턴스 수집
+  # DNS 기반 서비스 디스커버리 사용
+  - job_name: 'queue-service'
+    metrics_path: '/actuator/prometheus'
+    # Docker DNS를 통한 자동 디스커버리
+    # queue-service 도메인은 모든 인스턴스의 IP를 반환 (Round Robin)
+    dns_sd_configs:
+      - names:
+          - 'queue-service'  # Docker 서비스 이름
+        type: 'A'            # A 레코드 (IPv4 주소)
+        port: 8081
+        refresh_interval: 30s  # 30초마다 DNS 재조회 (인스턴스 변경 감지)
+    # 인스턴스 라벨 자동 생성
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - target_label: service
+        replacement: 'queue-service'
+
+  # Queue Service (정적 타겟 - 백업용)
+  # DNS 디스커버리가 작동하지 않을 경우를 대비한 정적 설정
+  # 최대 4개 인스턴스까지 지원
+  # 주석 처리 - DNS 디스커버리 우선 사용
+  # - job_name: 'queue-service-static'
+  #   metrics_path: '/actuator/prometheus'
+  #   static_configs:
+  #     - targets:
+  #       - 'ai-queue-service-1:8081'
+  #       - 'ai-queue-service-2:8081'
+  #       - 'ai-queue-service-3:8081'
+  #       - 'ai-queue-service-4:8081'
+  #       labels:
+  #         service: 'queue-service'
+  #   # 존재하지 않는 타겟은 자동으로 down 상태로 표시됨
+
+  # Redis Exporter (단일 인스턴스)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'redis'
+          instance: 'redis-1'

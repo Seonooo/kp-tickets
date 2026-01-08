@@ -216,7 +216,7 @@ public class RedisActiveQueueAdapter {
                 ttlSeconds
         );
 
-        if (jsonResult == null || jsonResult.isEmpty() || jsonResult.equals("[]")) {
+        if (jsonResult == null || jsonResult.isEmpty() || jsonResult.equals("[]") || jsonResult.equals("{}")) {
             log.debug("No users moved: concertId={}", concertId);
             return List.of();
         }

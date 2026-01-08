@@ -31,6 +31,7 @@ public class QueueController {
         private final ActivateTokenUseCase activateTokenUseCase;
         private final ExtendTokenUseCase extendTokenUseCase;
         private final ValidateTokenUseCase validateTokenUseCase;
+        private final RemoveFromQueueUseCase removeFromQueueUseCase;
         private final QueuePollingService queuePollingService;
 
         /**
@@ -160,5 +161,27 @@ public class QueueController {
                 log.info("SSE subscription request: concertId={}, userId={}", concertId, userId);
 
                 return queuePollingService.subscribe(concertId, userId);
+        }
+
+        /**
+         * 대기열에서 제거 (Phase 4: Queue 순환 테스트용)
+         * DELETE /api/v1/queue/remove?concertId={concertId}&userId={userId}
+         *
+         * K6 순환 테스트에서 Active Queue 사용 완료 후 호출
+         */
+        @DeleteMapping("/remove")
+        public ResponseEntity<ApiResponse<Void>> removeFromQueue(
+                        @RequestParam @jakarta.validation.constraints.NotBlank String concertId,
+                        @RequestParam @jakarta.validation.constraints.NotBlank String userId) {
+
+                log.info("Remove from queue: concertId={}, userId={}", concertId, userId);
+
+                RemoveFromQueueUseCase.RemoveFromQueueCommand command =
+                        new RemoveFromQueueUseCase.RemoveFromQueueCommand(concertId, userId);
+
+                removeFromQueueUseCase.removeFromQueue(command);
+
+                return ResponseEntity.ok(
+                                ApiResponse.success("대기열에서 제거되었습니다.", null));
         }
 }
