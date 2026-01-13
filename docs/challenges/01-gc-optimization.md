@@ -119,8 +119,11 @@ environment:
 
 **설정 설명**
 - `-XX:+UseZGC`: ZGC 활성화
-- `-XX:+ZGenerational`: Generational ZGC (Java 21+)
-- `-XX:SoftMaxHeapSize=1536m`: Soft limit (Over-Commit 방지)
+- `-XX:+ZGenerational`: Generational ZGC 활성화 ([JEP 439](https://openjdk.org/jeps/439), Java 21+)
+  - Young/Old Generation 분리로 GC 효율 향상
+- `-XX:SoftMaxHeapSize=1536m`: Soft GC 임계값 설정 ([JDK-8222145](https://bugs.openjdk.org/browse/JDK-8222145))
+  - 이 값 이하에서 GC 유지 시도, 초과 시에만 Max Heap(2GB)까지 사용
+  - Over-Commit 방지 및 메모리 사용 최적화
 
 ### 3단계: 재배포 및 테스트
 
@@ -366,16 +369,16 @@ Concurrent GC
 **장점**
 - ZGC와 유사한 Concurrent GC
 - Pause Time < 10ms
-- OpenJDK에 포함
+- OpenJDK 기반 배포판에 포함
 
 **단점**
-- Oracle JDK에 없음 (라이선스 이슈)
-- ZGC보다 약간 느림
+- ZGC보다 Pause Time이 약간 김 (< 10ms vs < 1ms)
 - Generational 지원 없음 (Java 21 기준)
+- ZGC 대비 프로덕션 검증 사례 적음
 
 **선택하지 않은 이유**
-- Oracle JDK 사용 환경
-- ZGC가 Generational 지원 (Java 21+)
+- **Pause Time**: 더 짧은 Pause Time을 가지는 것이 좋다고 생각함
+- **Generational 지원**: ZGC는 Java 21+ Generational ZGC를 지원하여 GC 효율 향상 ([JEP 439](https://openjdk.org/jeps/439))
 
 ### 2. Parallel GC
 

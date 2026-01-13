@@ -98,7 +98,7 @@ export const options = {
   scenarios: {
     queue_circulation: {
       executor: 'constant-arrival-rate',
-      rate: 2000,              // 초당 2000명 진입
+      rate: 2000,              // 초당 2000명 진입 (테스트 설정값)
       duration: '3m',          // 3분 테스트
       preAllocatedVUs: 1000,
       maxVUs: 3000,
@@ -114,7 +114,15 @@ export const options = {
     'queue_removal_success_total': ['count>100000'],      // 10만 건 이상 제거
   },
 };
+```
 
+**※ 테스트 설정 참고:**
+- `rate: 2000`은 **순환 검증을 위한 테스트 설정값**입니다.
+- 실제 K6 VU 자원 한계로 **실제 처리량은 163 req/s**로 측정되었습니다.
+- 이는 시스템의 **안정 구간**에서의 성능을 검증한 것이며, VU 증설 시 더 높은 처리량 달성 가능합니다.
+- 자세한 분석은 **"CS 이론과 깊이 > Little's Law 적용"** 섹션 참조
+
+```javascript
 export default function () {
   const concertId = 'concert-1234';
   const userId = `user-${__VU}-${__ITER}`;
@@ -431,24 +439,36 @@ W: 평균 체류 시간 (sec)
 ```
 
 **Active Queue에 적용**:
+
+**목표 vs 실제 도착률 차이:**
 ```
-λ = 2,000 users/sec (Entry Rate)
+K6 설정 목표: 2,000 users/sec
+실제 측정: 163 users/sec (8.2%)
+
+왜 차이가 나는가?
+- K6 VU 부족으로 실제 도착률 < 설정값
+- 드롭된 반복: 330,600회 (VU 자원 한계)
+- 실제 완료: 29,391회 (3분)
+```
+
+**→ 이는 테스트 환경 한계이며, 시스템 자체는 더 높은 처리량 지원 가능**
+
+**Little's Law로 검증:**
+```
+[이론값 계산]
+λ = 2,000 users/sec (설정값)
 W = 17.5sec (평균 사용 시간)
 
 L = 2,000 × 17.5 = 35,000 users
 
 → 이론적 Active Queue 크기: 35,000명
-→ 실제 측정: 평균 3,000명
+→ 실제 측정: 평균 3,000명 (차이 발생)
 
-왜 차이나는가?
-- K6 VU 부족으로 실제 도착률 < 2,000
-- 드롭된 반복: 330,600회
-- 실제 완료: 29,391회 (3분)
-- 실제 λ = 29,391 / 180 ≈ 163 users/sec
+[실제값으로 재계산]
+실제 λ = 29,391 / 180 ≈ 163 users/sec
 
-재계산:
 L = 163 × 17.5 = 2,853 users
-→ 실제 측정(3,000)과 일치!
+→ 실제 측정(3,000)과 일치! ✅
 ```
 
 #### 2. Throughput vs Latency 트레이드오프

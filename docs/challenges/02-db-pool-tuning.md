@@ -83,17 +83,27 @@ java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not avail
 ### 1단계: 최적 Pool Size 찾기
 
 **이론적 계산**
+
+이론적으로는 아래 공식으로 Pool Size를 계산할 수 있습니다
+
 ```
 Pool Size = Tn × (Cm - 1) + 1
 
 Tn: Thread 수 (200)
-Cm: 동시 Connection 수 (1~2)
+Cm: 트랜잭션당 동시 Connection 수 (1~2)
 
 → 최소: 200 × 1 + 1 = 201
 → 권장: 150~200
 ```
 
-**실험적 접근**
+**공식 출처**
+- 이 공식은 데드락 방지를 위한 이론적 최솟값입니다.
+- HikariCP 공식 문서 [About Pool Sizing](https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing) 참고
+- 실제 환경에서는 부하 테스트를 통해 최적값을 찾아야 합니다.
+
+**우리의 접근**
+이론값(201)을 참고하되 실제 테스트를 통해서 최적값을 도출
+
 ```bash
 # Pool 50 → 100 → 150 → 200 순차적 테스트
 ```

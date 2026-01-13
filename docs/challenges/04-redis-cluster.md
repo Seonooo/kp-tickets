@@ -255,12 +255,41 @@ redis-cli --cluster check localhost:6379
 - ✅ 서비스 중단 없음 (5초 내 복구)
 - ✅ 데이터 손실 없음 (Replication)
 
+### Replica 읽기 분산 전략
+
+**Cluster 선택 이유**
+1. **SPOF 제거**: Master 장애 시 Replica 자동 승격 (5초 내)
+2. **수평 확장**: 대기열 워크로드(쓰기/삭제 빈번)를 샤딩으로 분산
+
+**Cluster 내 Replica 역할**
+- ✅ **Failover 백업**: 각 Master의 고가용성 보장
+- ❌ **읽기 분산**: 구현하지 않음
+
+**읽기 분산을 구현하지 않은 이유**
+대기열 데이터는 **강한 일관성** 필요:
+- Wait Queue 위치: "내가 몇 번째인지" 실시간 정확도
+- Active Queue 상태: "활성화되었는지" 즉시 반영
+- Replication Lag (10ms~1s) 시 부정확한 정보 제공
+
+→ **모든 읽기/쓰기를 Master에서 처리**
+
+**만약 읽기 분산이 필요하다면**
+```java
+@Configuration
+public class RedisConfig {
+    @Bean
+    public LettuceClientConfigurationBuilderCustomizer customizer() {
+        return builder -> builder.readFrom(ReadFrom.REPLICA_PREFERRED);
+    }
+}
+```
+
 ### P95 36.4% 개선 원인 분석
 
-**1. 읽기 요청 분산**
-- 단일 Redis: 모든 읽기 → Master
-- Cluster: 읽기 → Master + Replica
-- → 부하 분산 효과
+**1. Hash Slot 분산**
+- 단일 Redis: 모든 키 → 단일 인스턴스
+- Cluster: 키가 Hash Slot에 따라 3개 Master로 분산
+- → 다중 콘서트 시 부하 분산 효과
 
 **2. 네트워크 지연 감소**
 - Cluster: 물리적으로 분산된 nodes
