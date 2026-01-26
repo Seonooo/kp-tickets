@@ -87,7 +87,8 @@ Queue Service (대기열 관리)
     ↓
 Core Service (예매/결제)
     ├─ HikariCP (Pool 150)
-    ├─ MySQL (Optimistic Lock)
+    ├─ Redis SETNX (Fail-Fast Lock)
+    ├─ MySQL (Unique Index)
     └─ Kafka (Outbox Pattern)
 ```
 
