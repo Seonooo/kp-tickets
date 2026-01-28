@@ -12,9 +12,26 @@
       "Bash(tree:*)",
       "Bash(./gradlew clean build:*)",
       "Bash(./gradlew :core-service:test:*)",
-      "Bash(./gradlew :queue-service:test:*)"
+      "Bash(./gradlew :queue-service:test:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "command": "node .claude/scripts/check-java-code.js \"$FILE_PATH\" && node .claude/scripts/check-architecture.js \"$FILE_PATH\" && node .claude/scripts/check-test-coverage.js \"$FILE_PATH\""
+      },
+      {
+        "matcher": "Write",
+        "command": "node .claude/scripts/check-java-code.js \"$FILE_PATH\" && node .claude/scripts/check-architecture.js \"$FILE_PATH\" && node .claude/scripts/check-test-coverage.js \"$FILE_PATH\""
+      },
+      {
+        "matcher": "Bash(git commit)",
+        "command": "node .claude/scripts/check-commit-message.js"
+      }
+    ]
   }
 }
