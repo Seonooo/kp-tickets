@@ -13,7 +13,16 @@
       "Bash(./gradlew clean build:*)",
       "Bash(./gradlew :core-service:test:*)",
       "Bash(./gradlew :queue-service:test:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(xargs ls:*)",
+      "Bash(find /c/Users/윤선호/IdeaProjects/ai -name CucumberTest*.java -o -name *Steps*.java)",
+      "Bash(claude:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []
@@ -29,7 +38,7 @@
         "command": "node .claude/scripts/check-java-code.js \"$FILE_PATH\" && node .claude/scripts/check-architecture.js \"$FILE_PATH\" && node .claude/scripts/check-test-coverage.js \"$FILE_PATH\""
       },
       {
-        "matcher": "Bash(git commit)",
+        "matcher": "Bash(git commit*)",
         "command": "node .claude/scripts/check-commit-message.js"
       }
     ]

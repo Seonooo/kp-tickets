@@ -66,6 +66,7 @@ if (!pattern.test(firstLine)) {
     console.log('     fix(booking): 좌석 중복 예약 버그 수정');
     console.log('     docs: README 업데이트');
     console.log('='.repeat(60) + '\n');
+    process.exit(1);
 }
 
 process.exit(0);
