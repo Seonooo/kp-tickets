@@ -15,7 +15,7 @@
       "Bash(./gradlew :queue-service:test:*)",
       "Bash(node:*)",
       "Bash(xargs ls:*)",
-      "Bash(find /c/Users/윤선호/IdeaProjects/ai -name CucumberTest*.java -o -name *Steps*.java)",
+      "Bash(find . -name CucumberTest*.java -o -name *Steps*.java)",
       "Bash(claude:*)",
       "Bash(gh pr create:*)",
       "Bash(gh pr comment:*)",

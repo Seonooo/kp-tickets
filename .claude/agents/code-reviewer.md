@@ -20,8 +20,8 @@
 
 ### Step 1: 변경사항 수집
 ```bash
-git diff --name-only HEAD~1  # 변경된 파일 목록
-git diff HEAD~1              # 상세 변경 내용
+git diff --name-only main  # 변경된 파일 목록 (PR 전체 기준)
+git diff main              # 상세 변경 내용
 ```
 
 ### Step 2: 검토 수행
@@ -170,8 +170,8 @@ if (obj instanceof User user) {
 
 | 결과 | 조건 |
 |------|------|
-| ✅ **APPROVED** | CRITICAL/HIGH 없음 |
-| ⚠️ **CHANGES REQUESTED** | MEDIUM만 존재 |
+| ✅ **APPROVED** | CRITICAL/HIGH/MEDIUM 없음 (LOW만 존재하거나 없음) |
+| ⚠️ **CHANGES REQUESTED** | CRITICAL/HIGH 없고 MEDIUM 존재 |
 | ❌ **BLOCKED** | CRITICAL 또는 HIGH 존재 |
 
 ---

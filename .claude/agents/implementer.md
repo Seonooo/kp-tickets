@@ -94,8 +94,8 @@ URI 버전 명시: `/api/v1/queue`, `/api/v1/bookings`
 
 1. **좌석 선점:** Redis 락 획득 → DB에 `PENDING` 상태로 먼저 저장
 2. **Mock 결제:** 트랜잭션 범위 밖에서 `PaymentMockService` 호출
-3. **상태 확정:** 결과에 따라 `SUCCESS` 또는 `CANCEL` 처리
-4. **Outbox:** Kafka 발행은 반드시 `@TransactionalEventListener(phase = AFTER_COMMIT)` 사용
+3. **상태 확정:** 결과에 따라 `CONFIRMED` 또는 `CANCELLED` 처리
+4. **Outbox:** 이벤트를 DB Outbox 테이블에 같은 트랜잭션으로 저장 → `@TransactionalEventListener(phase = AFTER_COMMIT)` 으로 Kafka 발행 → Scheduler가 미발행 이벤트 재처리
 5. **범위:** `readOnly=true` 조회와 쓰기 트랜잭션 명확히 분리, 범위 최소화
 
 ### F. Testing Strategy

@@ -83,13 +83,18 @@ module/
 adapter.in  → application.port.in
 adapter.out → application.port.out
 application → domain
+application → application.port.out  (자신의 Output Port 인터페이스)
 domain      → (외부 의존성 없음)
 
 [금지된 의존성]
 domain      → application, adapter
-application → adapter
+application → adapter.in
+application → adapter.out  (Port 인터페이스가 아닌 Adapter 구현체 직접 참조 금지)
 adapter.in  → adapter.out
 ```
+
+> **Note:** Application Layer는 `adapter.out.*` 패키지의 구현체에 직접 의존해서는 안 됩니다.
+> 반드시 `application.port.out.*` 에 정의된 Port 인터페이스를 통해서만 소통합니다.
 
 ---
 

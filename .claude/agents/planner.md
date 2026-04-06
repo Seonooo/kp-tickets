@@ -44,7 +44,7 @@ CLAUDE.md               → 작업 유형별 참조 파일 확인
 | 문서 | `docs/[내용]` | `docs/api-guide` |
 | 설정/기타 | `chore/[내용]` | `chore/harness-update` |
 
-```bash
+```text
 git checkout main
 git pull origin main
 git checkout -b [브랜치명]

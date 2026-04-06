@@ -8,9 +8,8 @@
 ## Usage
 
 ```
-/ship                    # 현재 브랜치 기준 전체 자동 처리
-/ship --draft            # Draft PR로 생성
-/ship --skip-review      # 리뷰 생략, PR만 생성
+/ship          # 현재 브랜치 기준 전체 자동 처리 (리뷰 항상 포함)
+/ship --draft  # Draft PR로 생성 (리뷰 포함)
 ```
 
 ---

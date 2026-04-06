@@ -58,7 +58,8 @@ const forbiddenImports = {
     ],
     'APPLICATION': [
         { pattern: /import\s+.*\.adapter\.in\./, message: 'Application → Inbound Adapter 의존 금지' },
-        { pattern: /import\s+.*\.adapter\.out\.(?!.*Port)/, message: 'Application → Outbound Adapter 직접 의존 금지 (Port 통해서만)' },
+        // adapter.out 패키지의 구현체 직접 참조 금지 (application.port.out 인터페이스만 허용)
+        { pattern: /import\s+.*\.adapter\.out\.[A-Z]/, message: 'Application → Outbound Adapter 구현체 직접 의존 금지 (application.port.out 인터페이스 사용)' },
     ],
     'ADAPTER_IN': [
         { pattern: /import\s+.*\.adapter\.out\./, message: 'Inbound Adapter → Outbound Adapter 의존 금지' },

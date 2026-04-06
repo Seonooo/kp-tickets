@@ -62,8 +62,18 @@ function checkEntityExposure() {
     lines.forEach((line, index) => {
         const lineNum = index + 1;
         entityImports.forEach(entity => {
-            const pattern = new RegExp(`(ResponseEntity<${entity}>|List<${entity}>|${entity}\\s+\\w+\\()`);
-            if (pattern.test(line) && !line.includes('Response') && !line.includes('Dto')) {
+            // ResponseEntity<Entity> 직접 반환 패턴
+            const responseEntityPattern = new RegExp(`ResponseEntity<${entity}>`);
+            // List<Entity> 직접 반환 패턴
+            const listPattern = new RegExp(`List<${entity}>`);
+            // 반환 타입으로 Entity 직접 사용 패턴 (DTO/Response 제외)
+            const directReturnPattern = new RegExp(`${entity}\\s+\\w+\\s*\\(`);
+
+            const isResponseEntity = responseEntityPattern.test(line);
+            const isListEntity = listPattern.test(line) && !line.includes('Dto') && !line.includes('Response');
+            const isDirectReturn = directReturnPattern.test(line) && !line.includes('Dto') && !line.includes('Response');
+
+            if (isResponseEntity || isListEntity || isDirectReturn) {
                 errors.push({ line: lineNum, type: 'ENTITY_EXPOSURE', message: `Entity(${entity}) 외부 노출 - DTO로 변환 필요`, code: line.trim() });
             }
         });
