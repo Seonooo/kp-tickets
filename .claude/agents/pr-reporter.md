@@ -70,7 +70,20 @@ git diff main --stat                  # 변경 규모 (파일 수, 라인 수)
 `security-reviewer` agent의 체크리스트 기준으로 검토합니다.
 CRITICAL/HIGH 발견 시에만 사용자에게 알립니다.
 
-### Step 5: 사용자 보고
+### Step 5: CodeRabbit 리뷰 처리
+
+PR 생성 후 `coderabbit-reviewer` agent를 자동 실행합니다.
+CodeRabbit 리뷰 수집 → 판단 → 수정/무시 → 기록까지 자동으로 처리됩니다.
+
+```
+coderabbit-reviewer
+  ├─ convention.md / architecture.md 기준으로 각 이슈 판단
+  ├─ 수정 항목 → 직접 fix 후 커밋
+  ├─ 오탐 항목 → 근거와 함께 PR 코멘트 기록
+  └─ pitfalls.md → 반복 가능한 오탐 패턴 자동 추가
+```
+
+### Step 6: 사용자 보고
 
 아래 형식으로만 보고합니다. **코드 상세 내용은 포함하지 않습니다.**
 
@@ -80,6 +93,10 @@ CRITICAL/HIGH 발견 시에만 사용자에게 알립니다.
 
 ```markdown
 ## 작업 완료 보고
+
+### CodeRabbit 리뷰
+- 전체: N개 | 수정: N개 | 무시(오탐): N개
+- 상세: PR 코멘트 참조
 
 ### 수행한 작업
 | Unit | 내용 | 상태 |

@@ -18,6 +18,7 @@
 | **DB/쿼리 작업** | `docs/erd.md`, `docs/architecture.md`, `.claude/agents/database-reviewer.md` |
 | **문서 업데이트** | `docs/`, `.claude/agents/doc-updater.md` |
 | **PR 생성 + 보고** | `.claude/agents/pr-reporter.md` |
+| **CodeRabbit 리뷰 처리** | `docs/convention.md`, `docs/architecture.md`, `.claude/agents/coderabbit-reviewer.md` |
 | **과거 오류 확인** | `docs/pitfalls.md` |
 
 ---
@@ -36,6 +37,7 @@ planner        문서 파악 → 사용자 이해 확인 → Unit 분해 → 승
        ├─ PR 자동 생성
        ├─ code-reviewer  (내부 수행)
        ├─ security-reviewer (내부 수행)
+       ├─ coderabbit-reviewer → 수정/오탐 판단 → pitfalls 기록
        └─ 사용자에게 요약 보고서만 전달
 ```
 
