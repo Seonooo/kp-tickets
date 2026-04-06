@@ -31,7 +31,7 @@ git diff main --stat                  # 변경 규모 (파일 수, 라인 수)
 브랜치명과 커밋 이력을 기반으로 PR을 자동 생성합니다.
 
 ```bash
-gh pr create \
+"/c/Program Files/GitHub CLI/gh.exe" pr create \
   --title "[타입](스코프): 작업 요약" \
   --body "$(PR 본문)" \
   --base main
@@ -62,7 +62,7 @@ gh pr create \
 
 ```bash
 # PR에 리뷰 결과 코멘트
-gh pr comment [PR번호] --body "[리뷰 결과 상세]"
+"/c/Program Files/GitHub CLI/gh.exe" pr comment [PR번호] --body "[리뷰 결과 상세]"
 ```
 
 ### Step 4: 보안 검토 (내부 수행, 요약만 보고)
