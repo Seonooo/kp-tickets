@@ -12,9 +12,42 @@
       "Bash(tree:*)",
       "Bash(./gradlew clean build:*)",
       "Bash(./gradlew :core-service:test:*)",
-      "Bash(./gradlew :queue-service:test:*)"
+      "Bash(./gradlew :queue-service:test:*)",
+      "Bash(node:*)",
+      "Bash(xargs ls:*)",
+      "Bash(find . -name CucumberTest*.java -o -name *Steps*.java)",
+      "Bash(claude:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(/c/Program Files/GitHub CLI/gh.exe*)",
+      "Bash(gh api*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)",
+      "Bash(git pull:*)"
     ],
     "deny": [],
     "ask": []
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "command": "node .claude/scripts/check-java-code.js \"$FILE_PATH\" && node .claude/scripts/check-architecture.js \"$FILE_PATH\" && node .claude/scripts/check-test-coverage.js \"$FILE_PATH\""
+      },
+      {
+        "matcher": "Write",
+        "command": "node .claude/scripts/check-java-code.js \"$FILE_PATH\" && node .claude/scripts/check-architecture.js \"$FILE_PATH\" && node .claude/scripts/check-test-coverage.js \"$FILE_PATH\""
+      },
+      {
+        "matcher": "Bash(git commit*)",
+        "command": "node .claude/scripts/check-commit-message.js"
+      }
+    ]
   }
 }

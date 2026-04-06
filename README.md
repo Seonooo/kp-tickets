@@ -173,6 +173,73 @@ Core Service (예매/결제)
 
 ---
 
+## 🤖 AI Development Workflow
+
+이 프로젝트는 **Claude Code 기반 하네스 엔지니어링**으로 개발됩니다.
+단순한 코드 생성 도구가 아닌, 설계부터 문서화까지 일관된 품질을 강제하는 자동화 시스템입니다.
+
+### Agent Flow
+
+```
+[요청]
+  → planner        문서 파악 → 사용자 이해 확인 → 기능 단위(Unit) 분해 → 승인
+  → [Unit 반복]
+       tdd-guide    테스트 먼저 작성 (Red)
+       implementer  헥사고날 레이어 순서대로 구현 (Green → Refactor)
+       hooks        코드 저장 시 자동 검증
+  → doc-updater    관련 문서 자동 업데이트
+  → code-reviewer  코드 품질 최종 검토
+  → commit         커밋 메시지 형식 강제
+```
+
+### 하네스 자동 검증 (2단계)
+
+파일이 저장될 때마다 자동으로 실행됩니다:
+
+```
+Stage 1: 빠른 regex 검사
+  └─ 위반 없음 → 즉시 통과
+  └─ 위반 감지 → Stage 2
+
+Stage 2: Agent 판단 (오탐 방지)
+  └─ APPROVED (오탐) → 통과
+  └─ BLOCKED (실제 위반) → 작업 중단, 수정 요구
+```
+
+**검증 항목:**
+
+| 검사 | 내용 |
+|------|------|
+| 코드 품질 | 디버그 코드, Entity 노출, 트랜잭션 내 I/O, 하드코딩 시크릿, N+1, Redis 원자성 |
+| 아키텍처 | 헥사고날 레이어 의존성 위반 |
+| 커밋 | Conventional Commits 형식 강제 |
+
+### 자기 개선 구조
+
+Agent가 실제 위반을 감지할 때마다 `docs/pitfalls.md`에 자동 기록됩니다.
+다음 작업 시 `implementer` agent가 이 이력을 참고하여 같은 실수를 반복하지 않습니다.
+
+```
+위반 감지 → docs/pitfalls.md 기록 → 다음 작업 시 참조 → 반복 방지
+```
+
+### Agent 구성
+
+| Agent | 역할 |
+|-------|------|
+| `planner` | 요청 분해, 문서 일치 점검, 사용자 확인 |
+| `implementer` | 헥사고날 레이어 순서 구현, 컨벤션 준수 |
+| `tdd-guide` | Red-Green-Refactor 사이클 가이드 |
+| `architect` | 아키텍처 설계 및 트레이드오프 분석 |
+| `code-reviewer` | 코드 품질 최종 리뷰 |
+| `security-reviewer` | 보안 취약점 검토 |
+| `database-reviewer` | 쿼리 성능 및 인덱스 검토 |
+| `doc-updater` | 작업 후 문서 자동 업데이트 |
+
+> 네비게이션 지도: [`CLAUDE.md`](./CLAUDE.md)
+
+---
+
 ## 🚀 Quick Start
 
 ### Prerequisites
