@@ -3,6 +3,7 @@ package personal.ai.core.booking.adapter.out.persistence;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import personal.ai.core.booking.application.port.out.OutboxEventRepository;
+import personal.ai.core.booking.application.service.OutboxEventService;
 import personal.ai.core.booking.domain.model.OutboxEvent;
 
 import java.util.List;
@@ -14,8 +15,6 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 public class OutboxEventPersistenceAdapter implements OutboxEventRepository {
-
-    private static final int MAX_RETRY_COUNT = 3;
 
     private final JpaOutboxEventRepository jpaOutboxEventRepository;
 
@@ -30,7 +29,7 @@ public class OutboxEventPersistenceAdapter implements OutboxEventRepository {
     public List<OutboxEvent> findPendingEvents() {
         return jpaOutboxEventRepository.findByStatusAndRetryCountLessThanOrderByCreatedAtAsc(
                 OutboxEventEntity.OutboxEventStatus.PENDING,
-                MAX_RETRY_COUNT)
+                OutboxEventService.MAX_RETRY_COUNT)
                 .stream()
                 .map(OutboxEventEntity::toDomain)
                 .collect(java.util.stream.Collectors.toList());

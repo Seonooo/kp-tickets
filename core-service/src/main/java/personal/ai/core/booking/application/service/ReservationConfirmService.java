@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import personal.ai.core.booking.application.port.in.ConfirmReservationUseCase;
 import personal.ai.core.booking.application.port.out.ReservationRepository;
 import personal.ai.core.booking.application.port.out.SeatRepository;
+import personal.ai.core.booking.domain.exception.ReservationExpiredException;
 import personal.ai.core.booking.domain.exception.ReservationNotFoundException;
 import personal.ai.core.booking.domain.exception.SeatNotFoundException;
 import personal.ai.core.booking.domain.model.Reservation;
@@ -33,6 +34,11 @@ public class ReservationConfirmService implements ConfirmReservationUseCase {
                 });
 
         reservation.ensureOwnership(command.userId());
+
+        if (reservation.isExpired()) {
+            log.warn("Reservation has expired: reservationId={}", command.reservationId());
+            throw new ReservationExpiredException(command.reservationId());
+        }
 
         var confirmedReservation = reservation.confirm();
         var savedReservation = reservationRepository.save(confirmedReservation);

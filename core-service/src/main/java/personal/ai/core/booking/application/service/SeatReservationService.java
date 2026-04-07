@@ -12,7 +12,7 @@ import personal.ai.core.booking.application.port.out.SeatLockRepository;
 import personal.ai.core.booking.domain.exception.ConcurrentReservationException;
 import personal.ai.core.booking.domain.exception.SeatAlreadyReservedException;
 import personal.ai.core.booking.domain.model.Reservation;
-import personal.ai.core.booking.domain.service.BookingManager;
+import personal.ai.core.booking.application.service.BookingManager;
 import personal.ai.core.booking.domain.service.QueueTokenExtractor;
 
 /**
@@ -49,7 +49,7 @@ public class SeatReservationService implements ReserveSeatUseCase {
         }
 
         try {
-            var saved = bookingManager.reserveSeatInTransaction(command);
+            var saved = bookingManager.reserveSeatInTransaction(command.userId(), command.seatId(), command.scheduleId());
             reservationCacheRepository.setReservationTTL(saved.id(), saved.expiresAt());
 
             // 캐시 무효화: 예약 성공 후 해당 스케줄의 좌석 캐시 삭제

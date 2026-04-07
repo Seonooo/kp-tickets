@@ -1,4 +1,4 @@
-package personal.ai.core.booking.domain.service;
+package personal.ai.core.booking.application.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,13 +12,15 @@ import personal.ai.core.booking.domain.model.OutboxEvent;
 import java.util.List;
 
 /**
- * Outbox Event Service
- * 대기 중인 이벤트를 발행 처리하는 도메인 서비스
+ * Outbox Event Service (Application Service)
+ * 대기 중인 이벤트를 발행 처리
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OutboxEventService implements PublishPendingEventsUseCase {
+
+    public static final int MAX_RETRY_COUNT = 3;
 
     private final OutboxEventRepository outboxEventRepository;
     private final ReservationEventPublisher eventPublisher;
@@ -32,16 +34,12 @@ public class OutboxEventService implements PublishPendingEventsUseCase {
         for (OutboxEvent event : pendingEvents) {
             try {
                 String topic = mapEventTypeToTopic(event.eventType());
-
-                // Key: Aggregate ID (reservationId) to ensure ordering
                 String key = String.valueOf(event.aggregateId());
 
                 log.debug("Publishing event: id={}, type={}, topic={}", event.id(), event.eventType(), topic);
 
-                // Publish Raw Payload directly
                 eventPublisher.publishRaw(topic, key, event.payload());
 
-                // Update Status (Immutable)
                 OutboxEvent publishedEvent = event.markAsPublished();
                 outboxEventRepository.save(publishedEvent);
                 publishedCount++;
@@ -49,10 +47,9 @@ public class OutboxEventService implements PublishPendingEventsUseCase {
             } catch (Exception e) {
                 log.error("Failed to publish event: id={}", event.id(), e);
 
-                // Retry Logic (Immutable)
                 OutboxEvent retriedEvent = event.incrementRetryCount();
 
-                if (retriedEvent.retryCount() >= 3) { // MAX_RETRY_COUNT
+                if (retriedEvent.retryCount() >= MAX_RETRY_COUNT) {
                     retriedEvent = retriedEvent.markAsFailed();
                 }
 

@@ -9,18 +9,26 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Kafka Consumer Configuration
- * Kafka Consumer 설정
+ * - Manual Ack 모드
+ * - Dead Letter Topic (DLT): 3회 재시도 후 {topic}.DLT로 이동
  */
 @EnableKafka
 @Configuration
 public class KafkaConsumerConfig {
+
+    private static final long RETRY_INTERVAL_MS = 1000L;
+    private static final long MAX_RETRY_ATTEMPTS = 3L;
 
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
@@ -39,16 +47,25 @@ public class KafkaConsumerConfig {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false); // Manual Ack 사용
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         return new DefaultKafkaConsumerFactory<>(props);
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
+    public DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<String, String> kafkaTemplate) {
+        var recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+        var backOff = new FixedBackOff(RETRY_INTERVAL_MS, MAX_RETRY_ATTEMPTS);
+        return new DefaultErrorHandler(recoverer, backOff);
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory(
+            DefaultErrorHandler kafkaErrorHandler) {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
-        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL); // Manual Ack
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
+        factory.setCommonErrorHandler(kafkaErrorHandler);
         return factory;
     }
 }
