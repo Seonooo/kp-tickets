@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import personal.ai.core.booking.application.port.in.ConfirmReservationUseCase;
 import personal.ai.core.booking.application.port.out.ReservationRepository;
 import personal.ai.core.booking.application.port.out.SeatRepository;
+import personal.ai.core.booking.domain.exception.ReservationExpiredException;
 import personal.ai.core.booking.domain.exception.ReservationNotFoundException;
 import personal.ai.core.booking.domain.exception.SeatNotFoundException;
 import personal.ai.core.booking.domain.model.Reservation;
@@ -33,6 +34,19 @@ public class ReservationConfirmService implements ConfirmReservationUseCase {
                 });
 
         reservation.ensureOwnership(command.userId());
+
+        // 멱등성 보장: 이미 확정된 예약은 중복 이벤트로 간주하고 조용히 반환
+        // (Kafka At-Least-Once 전달 특성상 동일 이벤트 재처리 가능)
+        if (reservation.isConfirmed()) {
+            log.warn("Reservation already confirmed (duplicate event), skipping: reservationId={}",
+                    command.reservationId());
+            return reservation;
+        }
+
+        if (reservation.isExpired()) {
+            log.warn("Reservation has expired: reservationId={}", command.reservationId());
+            throw new ReservationExpiredException(command.reservationId());
+        }
 
         var confirmedReservation = reservation.confirm();
         var savedReservation = reservationRepository.save(confirmedReservation);

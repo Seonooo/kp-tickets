@@ -3,9 +3,9 @@ package personal.ai.core.booking.application.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import personal.ai.core.booking.adapter.in.web.dto.SeatResponse;
 import personal.ai.core.booking.application.port.in.GetAvailableSeatsUseCase;
 import personal.ai.core.booking.application.port.out.QueueServiceClient;
+import personal.ai.core.booking.domain.model.Seat;
 import personal.ai.core.booking.domain.service.QueueTokenExtractor;
 
 import java.util.List;
@@ -28,27 +28,9 @@ public class AvailableSeatsQueryService implements GetAvailableSeatsUseCase {
     private final QueueServiceClient queueServiceClient;
 
     @Override
-    public List<SeatResponse> getAvailableSeats(Long scheduleId, Long userId, String queueToken) {
-        long serviceStartTime = System.currentTimeMillis();
-
-        // 토큰에서 concertId 추출 (형식: concertId:userId:counter)
+    public List<Seat> getAvailableSeats(Long scheduleId, Long userId, String queueToken) {
         String concertId = QueueTokenExtractor.extractConcertId(queueToken);
-
-        // Queue Service에 토큰 검증 요청 (캐시하면 안됨 - 보안)
-        long queueValidationStart = System.currentTimeMillis();
         queueServiceClient.validateToken(concertId, userId, queueToken);
-        long queueValidationTime = System.currentTimeMillis() - queueValidationStart;
-
-        // 좌석 조회 (Redis 캐시 적용 - Response DTO 직접 반환)
-        long cacheQueryStart = System.currentTimeMillis();
-        var availableSeats = seatQueryCacheService.findAvailableSeats(scheduleId);
-        long cacheQueryTime = System.currentTimeMillis() - cacheQueryStart;
-
-        long totalServiceTime = System.currentTimeMillis() - serviceStartTime;
-
-        log.info("Service timing - scheduleId: {}, total: {}ms, queueValidation: {}ms, cache: {}ms",
-                scheduleId, totalServiceTime, queueValidationTime, cacheQueryTime);
-
-        return availableSeats;
+        return seatQueryCacheService.findAvailableSeats(scheduleId);
     }
 }

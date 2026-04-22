@@ -15,6 +15,7 @@ import personal.ai.core.booking.application.port.in.GetReservationUseCase;
 import personal.ai.core.booking.application.port.in.ReserveSeatCommand;
 import personal.ai.core.booking.application.port.in.ReserveSeatUseCase;
 import personal.ai.core.booking.domain.model.Reservation;
+import personal.ai.core.booking.domain.model.Seat;
 
 import java.util.List;
 
@@ -44,17 +45,12 @@ public class BookingController {
             @RequestHeader("X-User-Id") Long userId,
             @RequestHeader("X-Queue-Token") String queueToken
     ) {
-        long controllerStartTime = System.currentTimeMillis();
         log.info("Get available seats: scheduleId={}, userId={}", scheduleId, userId);
 
-        long serviceCallStart = System.currentTimeMillis();
-        List<SeatResponse> response = getAvailableSeatsUseCase.getAvailableSeats(scheduleId, userId, queueToken);
-        long serviceCallTime = System.currentTimeMillis() - serviceCallStart;
+        List<Seat> seats = getAvailableSeatsUseCase.getAvailableSeats(scheduleId, userId, queueToken);
+        List<SeatResponse> response = seats.stream().map(SeatResponse::from).toList();
 
-        long totalControllerTime = System.currentTimeMillis() - controllerStartTime;
-
-        log.info("Controller timing - scheduleId: {}, total: {}ms, serviceCall: {}ms, seatCount: {}",
-                scheduleId, totalControllerTime, serviceCallTime, response.size());
+        log.info("Get available seats completed: scheduleId={}, seatCount={}", scheduleId, response.size());
 
         return ResponseEntity.ok(response);
     }

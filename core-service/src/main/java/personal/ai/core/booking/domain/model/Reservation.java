@@ -67,8 +67,7 @@ public record Reservation(
      */
     public Reservation confirm() {
         if (status != ReservationStatus.PENDING) {
-            throw new IllegalStateException(
-                    String.format("Cannot confirm reservation in %s status. Reservation ID: %d", status, id));
+            throw new InvalidReservationStateException(status);
         }
         return new Reservation(id, userId, seatId, scheduleId,
                 ReservationStatus.CONFIRMED, expiresAt, createdAt);
@@ -80,8 +79,7 @@ public record Reservation(
      */
     public Reservation cancel() {
         if (status != ReservationStatus.PENDING) {
-            throw new IllegalStateException(
-                    String.format("Cannot cancel reservation in %s status. Reservation ID: %d", status, id));
+            throw new InvalidReservationStateException(status);
         }
         return new Reservation(id, userId, seatId, scheduleId,
                 ReservationStatus.CANCELLED, expiresAt, createdAt);
@@ -93,8 +91,7 @@ public record Reservation(
      */
     public Reservation expire() {
         if (status != ReservationStatus.PENDING) {
-            throw new IllegalStateException(
-                    String.format("Cannot expire reservation in %s status. Reservation ID: %d", status, id));
+            throw new InvalidReservationStateException(status);
         }
         return new Reservation(id, userId, seatId, scheduleId,
                 ReservationStatus.EXPIRED, expiresAt, createdAt);
