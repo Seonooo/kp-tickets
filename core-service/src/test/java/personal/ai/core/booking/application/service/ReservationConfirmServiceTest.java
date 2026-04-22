@@ -115,12 +115,29 @@ class ReservationConfirmServiceTest {
     }
 
     @Test
-    @DisplayName("PENDING 이외 상태 예약 확정 시 InvalidReservationStateException 발생")
-    void confirmReservation_nonPending_throwsInvalidState() {
+    @DisplayName("이미 CONFIRMED 상태 예약은 멱등성 보장을 위해 조용히 반환한다 (중복 이벤트 처리)")
+    void confirmReservation_alreadyConfirmed_idempotentSkip() {
         // given
         Reservation alreadyConfirmed = new Reservation(RESERVATION_ID, USER_ID, SEAT_ID, SCHEDULE_ID,
                 ReservationStatus.CONFIRMED, LocalDateTime.now().plusMinutes(5), LocalDateTime.now());
         given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(alreadyConfirmed));
+
+        // when
+        Reservation result = reservationConfirmService.confirmReservation(command);
+
+        // then - 예외 없이 기존 예약 그대로 반환, DB 쓰기 없음
+        assertThat(result.status()).isEqualTo(ReservationStatus.CONFIRMED);
+        verify(reservationRepository, never()).save(any());
+        verify(seatRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("CANCELLED 상태 예약 확정 시 InvalidReservationStateException 발생")
+    void confirmReservation_cancelled_throwsInvalidState() {
+        // given
+        Reservation cancelled = new Reservation(RESERVATION_ID, USER_ID, SEAT_ID, SCHEDULE_ID,
+                ReservationStatus.CANCELLED, LocalDateTime.now().plusMinutes(5), LocalDateTime.now());
+        given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(cancelled));
 
         // when & then
         assertThatThrownBy(() -> reservationConfirmService.confirmReservation(command))

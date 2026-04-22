@@ -34,36 +34,7 @@ public class RedisCacheConfig implements CachingConfigurer {
 
         @Bean
         public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-                // ObjectMapper 설정: Record 타입 지원
-                ObjectMapper objectMapper = new ObjectMapper();
-
-                // Record 전용 설정: 필드만 직렬화 (getter 메서드 무시)
-                // isOccupied() 같은 메서드가 "occupied" 필드로 직렬화되는 것을 방지
-                objectMapper.setVisibility(
-                                objectMapper.getSerializationConfig()
-                                                .getDefaultVisibilityChecker()
-                                                .withFieldVisibility(
-                                                                com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.ANY)
-                                                .withGetterVisibility(
-                                                                com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE)
-                                                .withIsGetterVisibility(
-                                                                com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE));
-
-                // 타입 검증기: personal.ai 패키지와 java.util 컬렉션만 허용
-                BasicPolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
-                                .allowIfSubType("personal.ai") // 도메인 모델 허용
-                                .allowIfSubType("java.util") // List, ArrayList 등 허용
-                                .build();
-
-                // RecordSupportingTypeResolver 생성 (record 타입 지원)
-                RecordSupportingTypeResolver typeResolver = new RecordSupportingTypeResolver(
-                                ObjectMapper.DefaultTyping.NON_FINAL,
-                                ptv);
-
-                // ObjectMapper에 커스텀 TypeResolver 적용
-                objectMapper.setDefaultTyping(typeResolver);
-
-                GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(objectMapper);
+                GenericJackson2JsonRedisSerializer serializer = buildCacheValueSerializer();
 
                 RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
                                 .entryTtl(Duration.ofMillis(ttlMillis)) // application.yml의 TTL 설정 사용
@@ -87,5 +58,52 @@ public class RedisCacheConfig implements CachingConfigurer {
         @Override
         public CacheErrorHandler errorHandler() {
                 return new CustomCacheErrorHandler();
+        }
+
+        /**
+         * 캐시 값 직렬화기 생성 (테스트 가능하도록 분리)
+         *
+         * <p>record 타입 지원 및 도메인 패키지 화이트리스트를 포함한 JSON 직렬화기를 반환한다.
+         * Bean 메서드와 단위 테스트가 공유하여 설정 드리프트를 방지한다.
+         */
+        static GenericJackson2JsonRedisSerializer buildCacheValueSerializer() {
+                ObjectMapper objectMapper = new ObjectMapper();
+
+                // Record 전용 설정: 필드만 직렬화 (getter 메서드 무시)
+                // isOccupied() 같은 메서드가 "occupied" 필드로 직렬화되는 것을 방지
+                objectMapper.setVisibility(
+                                objectMapper.getSerializationConfig()
+                                                .getDefaultVisibilityChecker()
+                                                .withFieldVisibility(
+                                                                com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.ANY)
+                                                .withGetterVisibility(
+                                                                com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE)
+                                                .withIsGetterVisibility(
+                                                                com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.NONE));
+
+                // 타입 검증기: 도메인 패키지 + 컬렉션 + JDK 스칼라/날짜 타입 허용.
+                //
+                // NON_FINAL 기반 RecordSupportingTypeResolver가 record 뿐 아니라 필드 수준의
+                // Long/BigDecimal/enum/LocalDateTime에도 @class 타입 힌트를 붙인다. 따라서
+                // PTV 역시 해당 표준 패키지를 허용해야 역직렬화가 통과한다.
+                // (로컬 Redis 캐시 전용이며, 이미 java.util/personal.ai 를 허용한 상태라
+                // 추가 공격 표면은 제한적.)
+                BasicPolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
+                                .allowIfSubType("personal.ai") // 도메인 모델
+                                .allowIfSubType("java.util") // List, ArrayList 등
+                                .allowIfSubType("java.lang") // Long, Integer, Boolean 등 wrapper
+                                .allowIfSubType("java.math") // BigDecimal, BigInteger
+                                .allowIfSubType("java.time") // LocalDateTime 등
+                                .build();
+
+                // RecordSupportingTypeResolver 생성 (record 타입 지원)
+                RecordSupportingTypeResolver typeResolver = new RecordSupportingTypeResolver(
+                                ObjectMapper.DefaultTyping.NON_FINAL,
+                                ptv);
+
+                // ObjectMapper에 커스텀 TypeResolver 적용
+                objectMapper.setDefaultTyping(typeResolver);
+
+                return new GenericJackson2JsonRedisSerializer(objectMapper);
         }
 }

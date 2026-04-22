@@ -45,3 +45,7 @@ nul
 ### Test Results ###
 k6-tests/results/
 target/
+
+# Obsidian
+.obsidian/
+.trash/

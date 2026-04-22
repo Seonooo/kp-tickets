@@ -1,3 +1,11 @@
+---
+tags: [convention, standard]
+related:
+  - "[[architecture]]"
+  - "[[erd]]"
+  - "[[pitfalls]]"
+---
+
 # Coding Conventions & Standards
 
 이 문서는 **콘서트 티켓팅 서비스** 개발 시 준수해야 할 코드 스타일, 네이밍 규칙, 아키텍처 제약 사항을 정의한다.
@@ -137,7 +145,32 @@ public void publishEvent(...) { }
 - **MANDATORY:** 호출자가 트랜잭션을 시작하지 않으면 즉시 예외 발생 (Fail-Fast)
 - **효과:** 데이터 정합성 보장을 아키텍처 레벨에서 강제
 
-### 4.5 Service Separation (SRP + DIP)
+### 4.5 Domain Policy Constants
+
+비즈니스 정책으로 결정된 숫자/값은 도메인 상수 클래스에 정의한다.
+
+**판단 기준: 이 값이 "기술 설정"인가, "비즈니스 결정"인가?**
+- "재시도를 몇 번 할 것인가" → 비즈니스 정책 → **Domain**
+- "커넥션 풀 크기는 얼마인가" → 인프라 설정 → **`application.yml`**
+
+```java
+// ✅ domain/model/OutboxPolicy.java
+public final class OutboxPolicy {
+    public static final int MAX_RETRY_COUNT = 3;
+    private OutboxPolicy() {}
+}
+
+// ✅ Application Service & Persistence Adapter 모두 같은 상수 참조
+if (retriedEvent.retryCount() >= OutboxPolicy.MAX_RETRY_COUNT) { ... }
+
+// ❌ Application Service에 상수 선언 후 Adapter가 Service를 import
+import personal.ai.core.booking.application.service.OutboxEventService;
+OutboxEventService.MAX_RETRY_COUNT  // Adapter → Service 의존: 아키텍처 위반
+```
+
+**네이밍 규칙:** `{도메인}Policy` (ex. `OutboxPolicy`, `ReservationPolicy`)
+
+### 4.6 Service Separation (SRP + DIP)
 
 - **SRP (Single Responsibility):** UseCase 당 하나의 Application Service 클래스
   - ❌ `BookingService` (여러 UseCase 혼재)

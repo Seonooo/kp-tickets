@@ -20,6 +20,41 @@
 | **PR 생성 + 보고** | `.claude/agents/pr-reporter.md` |
 | **CodeRabbit 리뷰 처리** | `docs/convention.md`, `docs/architecture.md`, `.claude/agents/coderabbit-reviewer.md` |
 | **과거 오류 확인** | `docs/pitfalls.md` |
+| **작업 계획 수립/추적** | `docs/plans/`, `docs/templates/plan.md` |
+
+---
+
+## 작업 계획 파일 규칙
+
+**모든 다중-단계 작업은 시작 시 계획 파일을 생성한다.**
+
+- 위치: `docs/plans/{branch-name}.md` (브랜치당 1개)
+- 템플릿: `docs/templates/plan.md` 복사하여 시작
+- 구성: 이슈 보드 (우선순위 테이블) + 의사결정 로그 + 작업 로그
+
+### 동적 우선순위 관리
+
+- 이슈 보드의 **우선순위 컬럼은 언제든 변경** 가능
+- 새 이슈 발견 시 → 보드에 행 추가 후 우선순위 재정렬
+- 완료 시 → 상태를 ✅ Done 으로만 변경 (행 삭제 금지, 이력 보존)
+
+### 의사결정 로그
+
+- 선택지 여러 개가 있을 때마다 **선택지/결정/근거**를 기록
+- 다른 작업에서 참조할 수 있도록 `[[위키링크]]` 로 연결
+
+---
+
+## Obsidian 친화 포맷
+
+`docs/` 는 Obsidian vault로도 동작하도록 작성한다.
+
+- **YAML Frontmatter:** 중요 문서는 `---` 로 감싼 메타데이터 블록 보유 (`tags`, `related`, `status` 등)
+- **Wikilinks:** 문서 간 참조는 `[[파일명]]` 또는 `[[파일명#섹션]]` 사용
+- **Tags:** 분류는 `#tag` 형식 (frontmatter의 `tags:` 배열과 병용)
+- **예시:** `[[convention#4.5-Domain-Policy-Constants]]`, `[[erd#C-reservations]]`
+
+이 포맷은 Git/GitHub에서도 정상 렌더링되며, Obsidian에서는 추가로 그래프 뷰·백링크·Dataview 쿼리를 제공한다.
 
 ---
 

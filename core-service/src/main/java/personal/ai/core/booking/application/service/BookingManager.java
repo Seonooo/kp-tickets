@@ -9,8 +9,9 @@ import personal.ai.core.booking.application.port.out.ReservationRepository;
 import personal.ai.core.booking.application.port.out.SeatRepository;
 import personal.ai.core.booking.domain.exception.SeatNotFoundException;
 import personal.ai.core.booking.domain.model.Reservation;
-import personal.ai.core.booking.domain.model.ReservationStatus;
 import personal.ai.core.booking.domain.model.Seat;
+
+import java.util.Optional;
 
 /**
  * Booking Manager (Application Service - Transaction Manager)
@@ -44,39 +45,46 @@ public class BookingManager implements ExpireReservationUseCase {
 
     /**
      * 예약 만료 처리 (PENDING -> EXPIRED)
+     *
+     * <p>멱등성 보장: Redis TTL 만료 이벤트가 중복 도착하거나, 이미 다른 경로로
+     * 상태가 전이된 예약(CONFIRMED/CANCELLED/EXPIRED)에 대해서는 조용히 skip한다.
      */
     @Override
     @Transactional
     public void expireReservation(Long reservationId) {
         log.info("Expiring reservation: reservationId={}", reservationId);
 
-        Reservation reservation = reservationRepository.findById(reservationId).orElse(null);
-
-        if (reservation == null) {
+        Optional<Reservation> reservationOpt = reservationRepository.findById(reservationId);
+        if (reservationOpt.isEmpty()) {
             log.warn("Reservation not found for expiration: reservationId={}", reservationId);
             return;
         }
 
-        if (reservation.isConfirmed()) {
-            log.warn("Reservation is already confirmed: reservationId={}", reservationId);
-            return;
-        }
-
-        if (reservation.status() == ReservationStatus.EXPIRED) {
-            log.warn("Reservation is already expired: reservationId={}", reservationId);
+        Reservation reservation = reservationOpt.get();
+        if (!reservation.isPending()) {
+            log.warn("Reservation not in PENDING state, skipping expiration: reservationId={}, status={}",
+                    reservationId, reservation.status());
             return;
         }
 
         Reservation expiredReservation = reservation.expire();
         reservationRepository.save(expiredReservation);
 
-        Seat seat = seatRepository.findById(reservation.seatId())
-                .orElseThrow(() -> new SeatNotFoundException(reservation.seatId()));
+        releaseSeatIfReserved(reservation.seatId());
+    }
+
+    /**
+     * 좌석이 RESERVED 상태일 때만 해제한다.
+     * (OCCUPIED/AVAILABLE 상태는 방어적으로 무시)
+     */
+    private void releaseSeatIfReserved(Long seatId) {
+        Seat seat = seatRepository.findById(seatId)
+                .orElseThrow(() -> new SeatNotFoundException(seatId));
 
         if (seat.isReserved()) {
             Seat releasedSeat = seat.release();
             seatRepository.save(releasedSeat);
-            log.info("Seat released: seatId={}", seat.id());
+            log.info("Seat released: seatId={}", seatId);
         }
     }
 }

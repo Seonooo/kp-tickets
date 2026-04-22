@@ -151,4 +151,20 @@ class BookingManagerTest {
         // then
         verify(reservationRepository, never()).save(any());
     }
+
+    @Test
+    @DisplayName("CANCELLED 예약은 만료 처리하지 않고 조용히 skip한다 (기존 코드 버그 수정)")
+    void expireReservation_cancelled_skips() {
+        // given
+        Reservation cancelled = new Reservation(RESERVATION_ID, USER_ID, SEAT_ID, SCHEDULE_ID,
+                ReservationStatus.CANCELLED, LocalDateTime.now().plusMinutes(5), LocalDateTime.now());
+        given(reservationRepository.findById(RESERVATION_ID)).willReturn(Optional.of(cancelled));
+
+        // when - 기존 코드에서는 InvalidReservationStateException 발생했던 케이스
+        bookingManager.expireReservation(RESERVATION_ID);
+
+        // then - 예외 없이 skip, 상태 변경 없음
+        verify(reservationRepository, never()).save(any());
+        verify(seatRepository, never()).save(any());
+    }
 }
